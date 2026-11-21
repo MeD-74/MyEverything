@@ -9,7 +9,9 @@ const { ipcRenderer, desktopCapturer } = require('electron');
 const { Peer } = require('peerjs');
 
 const $ = (id) => document.getElementById(id);
-const statusEl = $('status'), statsEl = $('stats'), warnEl = $('warn'), badgeEl = $('roleBadge');
+const statusEl = $('status'), statsEl = $('stats'), warnEl = $('warn'), badgeEl = $('roleBadge'),
+      guestStateEl = $('guestState');
+let hostStarting = false, openTimer = null;
 
 function setStatus(msg, isError) {
   statusEl.textContent = msg;
@@ -50,6 +52,8 @@ function peerErrorArabic(err) {
 function destroyPeer() {
   try { if (statsTimer) clearInterval(statsTimer); } catch (e) {}
   statsTimer = null;
+  try { if (openTimer) clearTimeout(openTimer); } catch (e) {}
+  openTimer = null;
   try { if (dataConn) dataConn.close(); } catch (e) {}
   try { if (activeCall) activeCall.close(); } catch (e) {}
   try { if (peer) peer.destroy(); } catch (e) {}
@@ -156,35 +160,61 @@ async function replaceHostVideoTrack() {
 }
 
 // ---------- HOST ----------
-async function startHosting() {
+// The room code is shown IMMEDIATELY when hosting starts — it must never
+// depend on the network (PeerJS signalling) or on screen capture succeeding.
+// Signalling and capture happen after the code is already on screen.
+function showHostCode(code) {
+  $('hostBox').hidden = false;
+  $('roomCode').textContent = code;
+  $('btnLeave').hidden = false;
+  $('homeHint').hidden = true;
+  $('btnRetryHost').hidden = true;
+  guestStateEl.textContent = 'مستني الضيف يدخل…';
+}
+
+async function startHosting(keepCode) {
   if (peer) { setStatus('انت متصل أصلاً — دوس مغادرة الأول.', true); return; }
-  roomCode = String(Math.floor(100000 + Math.random() * 900000));
+  if (hostStarting) return;
+  hostStarting = true;
+  roomCode = (keepCode && roomCode) ? roomCode : String(Math.floor(100000 + Math.random() * 900000));
   role = 'host';
-  setStatus('بيجهز البث... افتح AirConsole واختار لعبة، والولي تدخل بالكود.');
-  setBadge('مضيف', 'live');
-  try {
-    await acquireHostStream();
-  } catch (e) {
-    setStatus('فشل تجهيز البث: ' + (e.message || e), true);
-    setBadge('مش متصل', '');
-    role = null;
-    return;
-  }
+  // 1) The code goes on screen RIGHT NOW, before any network or capture.
+  showHostCode(roomCode);
+  setBadge('جاري الاتصال…', 'connecting');
+  setStatus('الكود بتاعك: ' + roomCode + ' — جاري الاتصال بسيرفر الغرف… ابعته للولي من دلوقتي.');
+  // 2) Create the peer FIRST (cheap), then capture the screen.
   peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
-  peer.on('open', () => {
-    $('hostBox').hidden = false;
-    $('roomCode').textContent = roomCode;
-    $('btnLeave').hidden = false;
-    $('homeHint').hidden = true;
+  let opened = false;
+  if (openTimer) clearTimeout(openTimer);
+  openTimer = setTimeout(() => {
+    if (opened) return;
+    hostStarting = false;
+    setBadge('مش متصل', '');
+    setStatus('سيرفر الغرف مش بيرد — اتأكد من النت ودوس "إعادة المحاولة". الكود لسه: ' + roomCode, true);
+    $('btnRetryHost').hidden = false;
+  }, 15000);
+  peer.on('open', async () => {
+    opened = true;
+    if (openTimer) clearTimeout(openTimer);
+    hostStarting = false;
+    setBadge('مضيف', 'live');
     setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للولي، وهي تدخل من جهازها.');
+    try {
+      await acquireHostStream();
+      setStatus('البث جاهز — الكود: ' + roomCode + '. ابعته للولي.');
+    } catch (e) {
+      setStatus('الغرفة مفتوحة بالكود ' + roomCode + ' بس تجهيز البث فشل: ' + (e.message || e) + ' — دوس "إعادة المحاولة".', true);
+      $('btnRetryHost').hidden = false;
+    }
   });
   peer.on('call', (call) => {
     activeCall = call;
-    call.answer(hostStream);
+    call.answer(hostStream || new MediaStream());
     call.on('stream', () => {}); // host does not need the guest stream for video; mic audio (if any) plays via the call
-    call.on('close', () => { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); activeCall = null; });
+    call.on('close', () => { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); guestStateEl.textContent = 'مستني الضيف يدخل…'; activeCall = null; });
     call.on('error', (e) => setStatus(peerErrorArabic(e), true));
     startStats(call.peerConnection);
+    guestStateEl.textContent = 'الضيف متصل — البث شغال';
     setStatus('الولي دخلت الغرفة — البث شغال لحظياً.');
   });
   peer.on('connection', (conn) => {
@@ -193,9 +223,24 @@ async function startHosting() {
       // Guest remote input: forward to the BrowserView in the main process.
       if (ev && ev.type) ipcRenderer.send('remote-input', ev);
     });
-    conn.on('open', () => setStatus('الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'));
+    conn.on('open', () => { guestStateEl.textContent = 'الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'; setStatus('الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'); });
   });
-  peer.on('error', (e) => setStatus(peerErrorArabic(e), true));
+  peer.on('error', (e) => {
+    setStatus(peerErrorArabic(e), true);
+    if (!opened) { setBadge('مش متصل', ''); $('btnRetryHost').hidden = false; }
+  });
+  peer.on('disconnected', () => {
+    setStatus('الاتصال بسيرفر الغرف اتقطع — بيحاول يرجع…');
+    try { peer.reconnect(); } catch (e) {}
+  });
+}
+
+function retryHosting() {
+  $('btnRetryHost').hidden = true;
+  destroyPeer();
+  hostStarting = false;
+  role = null;
+  startHosting(true); // same code, shown again immediately
 }
 
 // ---------- GUEST ----------
@@ -213,7 +258,13 @@ async function startJoining() {
     catch (e) { setStatus('المايك مش متاح — هتكمل من غير صوت مايك.', true); }
   }
   peer = new Peer(PEER_CONFIG);
+  let guestOpened = false;
+  const guestTimer = setTimeout(() => {
+    if (!guestOpened) setStatus('سيرفر الغرف مش بيرد — اتأكد من النت وحاول تاني.', true);
+  }, 15000);
   peer.on('open', () => {
+    guestOpened = true;
+    clearTimeout(guestTimer);
     const conn = peer.connect('ourbeam-' + code, { reliable: true });
     dataConn = conn;
     conn.on('open', () => setStatus('متصل بالمضيف — جاري استقبال البث...'));
@@ -238,12 +289,14 @@ async function startJoining() {
 
 function leaveRoom() {
   destroyPeer();
-  role = null; roomCode = null;
+  role = null; roomCode = null; hostStarting = false;
   $('viewerWrap').hidden = true;
   $('homeHint').hidden = false;
   $('hostBox').hidden = true;
   $('joinBox').hidden = true;
   $('btnLeave').hidden = true;
+  $('btnRetryHost').hidden = true;
+  guestStateEl.textContent = 'مستني الضيف يدخل…';
   const v = $('remoteVideo'); v.srcObject = null;
   statsEl.textContent = 'التأخير: — | السرعة: — | الصورة: —';
   warnEl.hidden = true;
@@ -297,7 +350,15 @@ $('btnAirconsole').addEventListener('click', async () => {
   if (r && r.url) $('address').value = r.url;
 });
 
-$('btnHost').addEventListener('click', startHosting);
+$('btnHost').addEventListener('click', () => startHosting());
+$('btnHostHome').addEventListener('click', () => startHosting());
+$('btnJoinHome').addEventListener('click', () => { $('joinBox').hidden = false; $('joinCode').focus(); });
+$('btnRetryHost').addEventListener('click', retryHosting);
+$('btnNewTab').addEventListener('click', async () => {
+  const r = await ipcRenderer.invoke('nav', 'airconsole');
+  $('address').value = 'https://www.airconsole.com';
+  if (r && r.url) $('address').value = r.url;
+});
 $('btnJoinShow').addEventListener('click', () => { $('joinBox').hidden = false; $('joinCode').focus(); });
 $('btnJoinCancel').addEventListener('click', () => { $('joinBox').hidden = true; });
 $('btnJoin').addEventListener('click', startJoining);
@@ -311,8 +372,8 @@ $('btnLeave').addEventListener('click', leaveRoom);
 $('btnFullscreen').addEventListener('click', async () => {
   fullscreenOn = !fullscreenOn;
   await ipcRenderer.invoke('set-fullscreen-game', fullscreenOn);
-  $('btnFullscreen').textContent = fullscreenOn ? 'ارجع للواجهة' : 'ملء الشاشة للعبة';
-  $('toolbar').style.display = fullscreenOn ? 'none' : '';
+  $('btnFullscreen').textContent = fullscreenOn ? 'ارجع للواجهة' : 'ملء الشاشة';
+  $('chrome').style.display = fullscreenOn ? 'none' : '';
   if (fullscreenOn) setStatus('وضع اللعبة بملء الشاشة — دوس Esc عشان ترجع للواجهة.');
   if (!fullscreenOn) { /* toolbar back; BrowserView bounds restored by main */ }
 });
@@ -328,3 +389,22 @@ $('quality').addEventListener('change', async () => {
   } catch (e) { setStatus('فشل تغيير الجودة: ' + (e.message || e), true); }
 });
 $('micOn').addEventListener('change', () => setStatus('إعداد المايك هيتطبق في الاتصال الجاي.'));
+
+// ---------- Browser chrome: live tab title / address + BrowserView bounds ----------
+// The BrowserView must sit exactly under the header, whose height changes when
+// the room code or the join box appears — so the renderer measures it and
+// reports it to the main process instead of hardcoding a number.
+function reportChromeHeight() {
+  try {
+    const h = Math.ceil($('chrome').getBoundingClientRect().height);
+    ipcRenderer.invoke('set-view-bounds', { x: 0, y: h, width: window.innerWidth, height: Math.max(0, window.innerHeight - h) });
+  } catch (e) {}
+}
+window.addEventListener('resize', reportChromeHeight);
+if (window.ResizeObserver) new ResizeObserver(reportChromeHeight).observe($('chrome'));
+ipcRenderer.on('page-info', (_e, info) => {
+  if (!info) return;
+  if (info.title) $('tabTitle').textContent = info.title;
+  if (info.url && document.activeElement !== $('address')) $('address').value = info.url;
+});
+reportChromeHeight();

@@ -9,7 +9,9 @@ const path = require('path');
 
 let mainWindow = null;
 let view = null;
-let viewBounds = { x: 0, y: 110, width: 1280, height: 690 };
+// The renderer measures the real header height and reports it via
+// 'set-view-bounds'; 140 is only the fallback until the first report.
+let viewBounds = { x: 0, y: 140, width: 1280, height: 660 };
 let allowControl = true;
 let fullscreenGame = false;
 
@@ -27,6 +29,18 @@ function createView() {
   view.setBounds(viewBounds);
   view.setAutoResize({ width: true, height: true });
   view.webContents.loadURL('https://www.airconsole.com');
+  // Keep the tab title + address bar live as the user navigates inside the game page.
+  const sendPageInfo = () => {
+    try {
+      mainWindow.webContents.send('page-info', {
+        title: view.webContents.getTitle() || view.webContents.getURL(),
+        url: view.webContents.getURL(),
+      });
+    } catch (e) {}
+  };
+  view.webContents.on('page-title-updated', sendPageInfo);
+  view.webContents.on('did-navigate', sendPageInfo);
+  view.webContents.on('did-navigate-in-page', sendPageInfo);
   // AirConsole games want audio without a user gesture on the console page.
   view.webContents.setAudioMuted(false);
 }
@@ -53,7 +67,7 @@ function createWindow() {
   mainWindow.on('resize', () => {
     if (!view || fullscreenGame) return;
     const [w, h] = mainWindow.getContentSize();
-    viewBounds = { x: 0, y: 110, width: w, height: h - 110 };
+    viewBounds = { x: 0, y: viewBounds.y, width: w, height: h - viewBounds.y };
     view.setBounds(viewBounds);
   });
 
@@ -91,7 +105,7 @@ ipcMain.handle('set-fullscreen-game', (_e, on) => {
     view.setAutoResize({ width: true, height: true });
   } else {
     const [w, h] = mainWindow.getContentSize();
-    viewBounds = { x: 0, y: 110, width: w, height: h - 110 };
+    viewBounds = { x: 0, y: viewBounds.y, width: w, height: h - viewBounds.y };
     view.setBounds(viewBounds);
   }
   return fullscreenGame;
