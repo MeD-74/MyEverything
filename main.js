@@ -6,10 +6,12 @@
 //   as icons in the sidebar instead.
 // - AdGuard AdBlocker (beta, MV3, bundled in assets/extensions/adguard) is
 //   loaded into the session so ads are blocked inside every tab.
-// - Host capture is done in the renderer via desktopCapturer + getUserMedia
-//   (see renderer.js startHostStream). This process only owns the BrowserViews
+// - Host capture: the renderer picks the source list over IPC
+//   ('get-screen-sources' — desktopCapturer is main-process only) and then
+//   captures it with getUserMedia chromeMediaSource 'desktop'
+//   (see renderer.js acquireHostStream). This process only owns the BrowserViews
 //   and injects remote input into the active one via webContents.sendInputEvent.
-const { app, BrowserWindow, BrowserView, ipcMain, session, Menu } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, session, Menu, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -102,7 +104,7 @@ function createWindow() {
     backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: true, // personal app: renderer needs require('peerjs') + desktopCapturer
+      nodeIntegration: true, // personal app: renderer needs require('peerjs')
       contextIsolation: false,
       webviewTag: false,
     },
@@ -143,6 +145,16 @@ ipcMain.handle('tab-switch', (_e, id) => {
   const ok = showTab(id);
   const tab = activeTab();
   return { ok, activeId: activeTabId, url: tab ? tab.url : '' };
+});
+
+// Screen sources for host capture. desktopCapturer is MAIN-PROCESS ONLY in
+// Electron 45 — require('electron').desktopCapturer is undefined in the
+// renderer, so the renderer asks here over IPC instead. (That was the real
+// sharing bug: the renderer called desktopCapturer.getSources directly and
+// capture threw on every machine, so guests always got an empty stream.)
+ipcMain.handle('get-screen-sources', async () => {
+  const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+  return sources.map((s) => ({ id: s.id, name: s.name }));
 });
 
 ipcMain.handle('nav', (_e, action, url) => {

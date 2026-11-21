@@ -5,7 +5,7 @@
 // P2P may fail; see README troubleshooting.
 // Latency honesty: stats below are real values from RTCPeerConnection.getStats().
 // Nothing here invents a latency number.
-const { ipcRenderer, desktopCapturer } = require('electron');
+const { ipcRenderer } = require('electron');
 const { Peer } = require('peerjs');
 
 const $ = (id) => document.getElementById(id);
@@ -39,6 +39,10 @@ const QUALITY = {
 
 let peer = null, role = null, roomCode = null;
 let hostStream = null, micStream = null, activeCall = null, dataConn = null;
+// The host-initiated media call that carries the screen video to the guest.
+// (The guest's own outbound call is audio-only: its offer has no video
+// m-line, so no video can ever flow back on it — see ensureGuestCall.)
+let videoCall = null;
 let statsTimer = null, lastStats = null;
 let fullscreenOn = false;
 
@@ -87,8 +91,9 @@ function destroyPeer() {
   openTimer = null;
   try { if (dataConn) dataConn.close(); } catch (e) {}
   try { if (activeCall) activeCall.close(); } catch (e) {}
+  try { if (videoCall) videoCall.close(); } catch (e) {}
   try { if (peer) peer.destroy(); } catch (e) {}
-  peer = null; activeCall = null; dataConn = null;
+  peer = null; activeCall = null; dataConn = null; videoCall = null;
   [hostStream, micStream].forEach((s) => { if (s) s.getTracks().forEach((t) => t.stop()); });
   hostStream = null; micStream = null;
 }
@@ -140,7 +145,9 @@ function startStats(pc) {
 // ---------- Host capture: the OurBeam window (game) + system audio ----------
 async function acquireHostStream() {
   const q = QUALITY[$('quality').value] || QUALITY.race;
-  const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+  // desktopCapturer lives in the MAIN process only — the renderer asks for
+  // the source list over IPC (see 'get-screen-sources' in main.js).
+  const sources = await ipcRenderer.invoke('get-screen-sources');
   const self = sources.find((s) => /OurBeam/i.test(s.name)) || sources.find((s) => s.name.toLowerCase().includes('screen')) || sources[0];
   if (!self) throw new Error('No screen source available for streaming.');
   // Try video + system-audio loopback first; fall back to video-only.
@@ -184,10 +191,49 @@ async function acquireHostStream() {
 }
 
 async function replaceHostVideoTrack() {
-  if (!activeCall || !activeCall.peerConnection) return;
-  const sender = activeCall.peerConnection.getSenders().find((s) => s.track && s.track.kind === 'video');
+  if (!videoCall || !videoCall.peerConnection) return;
+  const sender = videoCall.peerConnection.getSenders().find((s) => s.track && s.track.kind === 'video');
   const track = hostStream && hostStream.getVideoTracks()[0];
   if (sender && track) { try { await sender.replaceTrack(track); } catch (e) {} }
+}
+
+// The screen video can ONLY travel on a call the HOST places: the guest's
+// outbound call offers no video m-line (it carries mic audio at most), so
+// answering it can never send video back — SDP answers can't add media
+// sections the offer didn't have. The guest therefore gets the screen on
+// this host-initiated call, and accepts it via its peer.on('call') handler.
+function bindHostCall(call) {
+  call.on('stream', () => {}); // host does not need the guest stream for video; mic audio (if any) plays via the call
+  call.on('close', () => { setStatus('Guest left. The room is still open with code ' + roomCode + '.'); setGuestState('Waiting for guest…', false); clearPeer(); if (activeCall === call) activeCall = null; if (videoCall === call) videoCall = null; });
+  call.on('error', (e) => setStatus(peerErrorEnglish(e), true));
+  startStats(call.peerConnection);
+  setGuestState('Guest connected — streaming live', true);
+  setStatus('Loly joined the room — streaming live.');
+}
+function hostHasLiveVideo() {
+  try {
+    const pc = videoCall && videoCall.peerConnection;
+    return !!(pc && pc.getSenders().some((s) => s.track && s.track.kind === 'video' && s.track.readyState === 'live'));
+  } catch (e) { return false; }
+}
+// (Re)place the host-initiated video call to the guest once the screen
+// stream exists and the guest is reachable. Called when the stream becomes
+// ready, when the guest's mic call arrives, and when the data connection
+// opens — whichever comes last wins, so a guest who joined while the host
+// was still capturing still gets the video.
+function ensureGuestCall() {
+  if (role !== 'host' || !hostStream || !peer) return;
+  if (videoCall && hostHasLiveVideo()) return;
+  const guestId = (videoCall && videoCall.peer) || (activeCall && activeCall.peer) || (dataConn && dataConn.peer);
+  if (!guestId) return;
+  try { if (videoCall) videoCall.close(); } catch (e) {}
+  videoCall = null;
+  try {
+    const call = peer.call(guestId, hostStream);
+    videoCall = call;
+    activeCall = call;
+    bindHostCall(call);
+  } catch (e) {}
 }
 
 // ---------- HOST ----------
@@ -251,6 +297,7 @@ async function startHosting(keepCode) {
     try {
       await acquireHostStream();
       setStatus('Stream is ready — code: ' + roomCode + '. Send it to Loly.');
+      ensureGuestCall();
     } catch (e) {
       setStatus('Room is open with code ' + roomCode + ' but stream setup failed: ' + (e.message || e) + ' — click "Retry".', true);
       $('btnRetryHost').hidden = false;
@@ -258,13 +305,12 @@ async function startHosting(keepCode) {
   });
   peer.on('call', (call) => {
     activeCall = call;
-    call.answer(hostStream || new MediaStream());
-    call.on('stream', () => {}); // host does not need the guest stream for video; mic audio (if any) plays via the call
-    call.on('close', () => { setStatus('Guest left. The room is still open with code ' + roomCode + '.'); setGuestState('Waiting for guest…', false); clearPeer(); activeCall = null; });
-    call.on('error', (e) => setStatus(peerErrorEnglish(e), true));
-    startStats(call.peerConnection);
-    setGuestState('Guest connected — streaming live', true);
-    setStatus('Loly joined the room — streaming live.');
+    // This is the guest's mic call (audio only). Answer at once — the
+    // screen video goes out on the host-initiated call (ensureGuestCall),
+    // because this call's offer has no video m-line to answer with.
+    call.answer(hostStream || micStream || new MediaStream());
+    bindHostCall(call);
+    ensureGuestCall();
   });
   peer.on('connection', (conn) => {
     dataConn = conn;
@@ -278,6 +324,7 @@ async function startHosting(keepCode) {
       sendHello();
       setGuestState('Guest connected and controlling', true);
       setStatus('Guest connected and controlling — uncheck "Let guest control" if you want to stop that.');
+      ensureGuestCall();
     });
   });
   peer.on('error', (e) => {
@@ -299,6 +346,29 @@ function retryHosting() {
 }
 
 // ---------- GUEST ----------
+// One handler for any incoming media call — the outbound call to the host
+// and host-initiated (re-)calls after the stream becomes ready.
+function attachGuestStream(call) {
+  call.on('stream', (remoteStream) => {
+    const v = $('remoteVideo');
+    v.srcObject = remoteStream;
+    v.play().catch(() => {});
+    // The guest's own outbound call carries audio only (mic) — the screen
+    // video arrives on the host's call. Only open the viewer for video.
+    if (!remoteStream.getVideoTracks().length) return;
+    $('viewerWrap').hidden = false;
+    $('homeHint').hidden = true;
+    $('btnLeave').hidden = false;
+    $('btnLeave2').hidden = false;
+    $('sideLeave').hidden = false;
+    showParty('guest');
+    saveRecent(roomCode, 'guest');
+    setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
+  });
+  call.on('close', () => { setStatus('The host closed the stream.', true); });
+  call.on('error', (e) => setStatus(peerErrorEnglish(e), true));
+  startStats(call.peerConnection);
+}
 async function startJoining() {
   const code = $('joinCode').value.trim();
   if (!/^\d{6}$/.test(code)) { setStatus('Type the room code — 6 digits.', true); return; }
@@ -329,22 +399,14 @@ async function startJoining() {
     conn.on('error', (e) => setStatus(peerErrorEnglish(e), true));
     const call = peer.call('ourbeam-' + code, mic || new MediaStream());
     activeCall = call;
-    call.on('stream', (remoteStream) => {
-      const v = $('remoteVideo');
-      v.srcObject = remoteStream;
-      v.play().catch(() => {});
-      $('viewerWrap').hidden = false;
-      $('homeHint').hidden = true;
-      $('btnLeave').hidden = false;
-      $('btnLeave2').hidden = false;
-      $('sideLeave').hidden = false;
-      showParty('guest');
-      saveRecent(code, 'guest');
-      setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
-    });
-    call.on('close', () => { setStatus('The host closed the stream.', true); });
-    call.on('error', (e) => setStatus(peerErrorEnglish(e), true));
-    startStats(call.peerConnection);
+    attachGuestStream(call);
+  });
+  // The host may call the guest (again) once its screen stream is ready —
+  // accept it the same way as the outbound call.
+  peer.on('call', (incoming) => {
+    incoming.answer(micStream || mic || new MediaStream());
+    activeCall = incoming;
+    attachGuestStream(incoming);
   });
   peer.on('error', (e) => setStatus(peerErrorEnglish(e), true));
 }
@@ -546,6 +608,7 @@ $('quality').addEventListener('change', async () => {
     await acquireHostStream();
     old.getTracks().forEach((t) => t.stop());
     await replaceHostVideoTrack();
+    ensureGuestCall();
     setStatus('Quality changed to ' + (QUALITY[$('quality').value] || {}).label + '.');
   } catch (e) { setStatus('Failed to change quality: ' + (e.message || e), true); }
 });
