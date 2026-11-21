@@ -1,7 +1,7 @@
-// MyEverything — Web version (static only, GitHub Pages ready)
+// OurBeam — Web version (static only, GitHub Pages ready)
 // Same room protocol as the desktop app, so the two are interoperable:
 //   - PeerJS public cloud for signalling only (0.peerjs.com:443)
-//   - Host Peer ID: `myeverything-XXXXXX` (random 6-digit code)
+//   - Host Peer ID: `ourbeam-XXXXXX` (random 6-digit code)
 //   - Same Google STUN servers, same DataConnection control protocol:
 //     {type:'mousemove'|'mousedown'|'mouseup'|'wheel'|'keydown'|'keyup',
 //      x:0..1, y:0..1, deltaY, key, button}
@@ -159,7 +159,7 @@
     setStatus('اختار تبويب AirConsole من نافذة المشاركة، وعلّم على "Share tab audio" عشان صوت اللعبة يوصل.');
     setBadge('مضيف (ويب)', 'live');
     acquireHostStream().then(function () {
-      peer = new Peer('myeverything-' + roomCode, PEER_CONFIG);
+      peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
       peer.on('open', function () {
         $('hostBox').hidden = false;
         $('roomCode').textContent = roomCode;
@@ -209,11 +209,11 @@
     micPromise.then(function (mic) {
       peer = new Peer(PEER_CONFIG);
       peer.on('open', function () {
-        var conn = peer.connect('myeverything-' + code, { reliable: true });
+        var conn = peer.connect('ourbeam-' + code, { reliable: true });
         dataConn = conn;
         conn.on('open', function () { setStatus('متصل بالمضيف — جاري استقبال البث...'); });
         conn.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
-        var call = peer.call('myeverything-' + code, mic || new MediaStream());
+        var call = peer.call('ourbeam-' + code, mic || new MediaStream());
         activeCall = call;
         call.on('stream', function (remoteStream) {
           var v = $('remoteVideo');
