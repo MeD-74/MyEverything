@@ -1,5 +1,8 @@
-name: Build MyEverything
+name: Build OurBeam
 
+# Builds the real installers on real Windows + macOS runners.
+# Linux cannot build a Windows NSIS installer (no wine) or a signed Mac app,
+# so do NOT try to build those targets locally — this workflow is the build route.
 on:
   push:
     branches: [main]
@@ -16,13 +19,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run dist:win -- --publish never
+      - run: npm run dist:win
       - uses: actions/upload-artifact@v4
         with:
-          name: MyEverything-Windows
+          name: OurBeam-Windows
           path: |
-            dist/MyEverything-Setup-v*.exe
-            dist/MyEverything-v*.exe
+            dist/OurBeam-Setup-v*.exe
+            dist/OurBeam-v*.exe
           if-no-files-found: error
 
   build-mac:
@@ -34,11 +37,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run dist:mac -- --publish never
+      - run: npm run dist:mac
       - uses: actions/upload-artifact@v4
         with:
-          name: MyEverything-Mac
+          name: OurBeam-Mac
           path: |
-            dist/MyEverything-v*.dmg
-            dist/MyEverything-v*.zip
+            dist/OurBeam-v*.dmg
+            dist/OurBeam-v*.zip
           if-no-files-found: error
