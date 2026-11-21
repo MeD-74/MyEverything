@@ -213,6 +213,7 @@ function showHostCode(code) {
   $('roomCode').textContent = code;
   $('btnLeave').hidden = false;
   $('btnLeave2').hidden = false;
+  $('sideLeave').hidden = false;
   $('homeHint').hidden = true;
   $('btnRetryHost').hidden = true;
   setGuestState('Waiting for guest…', false);
@@ -336,6 +337,7 @@ async function startJoining() {
       $('homeHint').hidden = true;
       $('btnLeave').hidden = false;
       $('btnLeave2').hidden = false;
+      $('sideLeave').hidden = false;
       showParty('guest');
       saveRecent(code, 'guest');
       setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
@@ -358,6 +360,7 @@ function leaveRoom() {
   $('joinBox').hidden = true;
   $('btnLeave').hidden = true;
   $('btnLeave2').hidden = true;
+  $('sideLeave').hidden = true;
   $('party').hidden = true;
   $('btnRetryHost').hidden = true;
   setGuestState('Waiting for guest…', false);
@@ -446,9 +449,9 @@ function syncAddressBar() {
   if (t && document.activeElement !== $('address')) $('address').value = t.url;
 }
 async function newTab(url) {
-  const r = await ipcRenderer.invoke('tab-new', url || 'https://www.airconsole.com');
+  const r = await ipcRenderer.invoke('tab-new', url || undefined);
   if (!r || !r.id) return;
-  tabs.push({ id: r.id, title: 'New Tab', url: r.url || 'https://www.airconsole.com' });
+  tabs.push({ id: r.id, title: 'Home', url: r.url || 'ourbeam://home' });
   activeTabId = r.id;
   renderTabs();
   syncAddressBar();
@@ -507,18 +510,29 @@ $('btnFullscreen').addEventListener('click', async () => {
   $('btnFullscreen').textContent = fullscreenOn ? 'Exit Fullscreen' : 'Fullscreen';
   $('btnFullscreen2').textContent = fullscreenOn ? 'Exit Fullscreen' : 'Fullscreen';
   $('chrome').style.display = fullscreenOn ? 'none' : '';
+  $('sidebar').style.display = fullscreenOn ? 'none' : '';
   $('bottombar').style.display = fullscreenOn ? 'none' : '';
   $('party').style.display = fullscreenOn ? 'none' : '';
-  if (fullscreenOn) setStatus('Fullscreen game mode — press Esc to go back to the browser.');
+  $('fullscreenBar').hidden = !fullscreenOn;
+  if (fullscreenOn) setStatus('Fullscreen game mode — press Esc or click "Exit Fullscreen" at the top to go back.');
   if (!fullscreenOn) { /* layout back; BrowserView bounds restored by stage ResizeObserver */ }
 });
+$('btnExitFullscreen').addEventListener('click', () => $('btnFullscreen').click());
 $('btnFullscreen2').addEventListener('click', () => $('btnFullscreen').click());
 $('btnLeave2').addEventListener('click', leaveRoom);
-$('btnOpenBrowser').addEventListener('click', async () => {
+$('sideLeave').addEventListener('click', leaveRoom);
+$('sideNewTab').addEventListener('click', () => newTab());
+$('sideAirconsole').addEventListener('click', async () => {
   const r = await ipcRenderer.invoke('nav', 'airconsole');
   $('address').value = 'https://www.airconsole.com';
   if (r && r.url) $('address').value = r.url;
 });
+$('sideYoutube').addEventListener('click', async () => {
+  const r = await ipcRenderer.invoke('nav', 'go', 'https://www.youtube.com');
+  if (r && r.url) $('address').value = r.url;
+});
+$('sideFullscreen').addEventListener('click', () => $('btnFullscreen').click());
+$('btnOpenBrowser').addEventListener('click', () => newTab());
 $('btnCopyCode2').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(roomCode || ''); setStatus('Code copied: ' + roomCode); }
   catch (e) { setStatus('Code: ' + roomCode + ' — copy it manually.', true); }
@@ -569,8 +583,9 @@ ipcRenderer.on('page-info', (_e, info) => {
 // ---------- Mic mute (bottom bar) ----------
 let micMuted = false;
 function updateMicButtons() {
-  const b = $('btnMicMute');
+  const b = $('btnMicMute'), s = $('sideMic');
   b.classList.toggle('muted', micMuted);
+  s.classList.toggle('muted', micMuted);
   b.querySelector('span').textContent = micMuted ? 'Mic muted' : 'Mic on';
 }
 function toggleMicMute() {
@@ -581,6 +596,7 @@ function toggleMicMute() {
   setStatus(micMuted ? 'Mic muted — the guest cannot hear you.' : 'Mic is on again.');
 }
 $('btnMicMute').addEventListener('click', toggleMicMute);
+$('sideMic').addEventListener('click', toggleMicMute);
 
 // ---------- LOAD SAVE: recent rooms (localStorage) ----------
 const RECENT_KEY = 'ourbeam-recent';

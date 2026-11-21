@@ -1,17 +1,28 @@
 // OurBeam — Main process (Electron 45)
 // - Main window: English LTR UI (renderer)
-// - Real tabs: one BrowserView per tab (AirConsole by default). Tabs can be
-//   opened (+), closed (x) and switched — each keeps its own page.
+// - Real tabs: one BrowserView per tab. New tabs and the first tab open the
+//   local home page (home.html, Hyperbeam-style new tab) — NOT AirConsole.
+// - The macOS app menu (File/Edit/View/Window) is removed; those actions live
+//   as icons in the sidebar instead.
+// - AdGuard AdBlocker (beta, MV3, bundled in assets/extensions/adguard) is
+//   loaded into the session so ads are blocked inside every tab.
 // - Host capture is done in the renderer via desktopCapturer + getUserMedia
 //   (see renderer.js startHostStream). This process only owns the BrowserViews
 //   and injects remote input into the active one via webContents.sendInputEvent.
-const { app, BrowserWindow, BrowserView, ipcMain, session } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, session, Menu } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { pathToFileURL } = require('url');
+
+// Local home page (file:// URL) and the pretty address shown for it.
+const HOME_FILE = path.join(__dirname, 'home.html');
+const HOME_URL = pathToFileURL(HOME_FILE).href;
+const HOME_DISPLAY_URL = 'ourbeam://home';
 
 let mainWindow = null;
 // The renderer measures the real stage rect and reports it via
 // 'set-view-bounds'; this is only the fallback until the first report.
-let viewBounds = { x: 0, y: 140, width: 1280, height: 660 };
+let viewBounds = { x: 60, y: 140, width: 1220, height: 660 };
 let allowControl = true;
 let fullscreenGame = false;
 
@@ -33,12 +44,14 @@ function createTab(url) {
       sandbox: false,
     },
   });
-  const tab = { view, url: url || 'https://www.airconsole.com', title: 'New Tab' };
+  const tab = { view, url: url || HOME_URL, title: 'Home' };
   tabs.set(id, tab);
   const sendPageInfo = () => {
     try {
-      tab.url = view.webContents.getURL();
-      tab.title = view.webContents.getTitle() || tab.url;
+      const realUrl = view.webContents.getURL();
+      const isHome = realUrl === HOME_URL || realUrl.startsWith('file://');
+      tab.url = isHome ? HOME_DISPLAY_URL : realUrl;
+      tab.title = isHome ? 'Home' : (view.webContents.getTitle() || tab.url);
       mainWindow.webContents.send('page-info', { tabId: id, title: tab.title, url: tab.url });
     } catch (e) {}
   };
@@ -49,7 +62,8 @@ function createTab(url) {
   view.webContents.setAudioMuted(false);
   view.setBounds(viewBounds);
   view.setAutoResize({ width: true, height: true });
-  view.webContents.loadURL(tab.url);
+  if (tab.url === HOME_URL) view.webContents.loadFile(HOME_FILE);
+  else view.webContents.loadURL(tab.url);
   return { id, tab };
 }
 
@@ -68,9 +82,9 @@ function closeTab(id) {
   try { mainWindow.removeBrowserView(tab.view); } catch (e) {}
   try { tab.view.webContents.destroy(); } catch (e) {}
   tabs.delete(id);
-  // Never leave the window without a tab: open a fresh one instead.
+  // Never leave the window without a tab: open a fresh home tab instead.
   if (tabs.size === 0) {
-    const created = createTab('https://www.airconsole.com');
+    const created = createTab();
     showTab(created.id);
   } else if (activeTabId === id) {
     showTab([...tabs.keys()][tabs.size - 1]);
@@ -95,7 +109,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
-  const first = createTab('https://www.airconsole.com');
+  const first = createTab();
   showTab(first.id);
 
   mainWindow.on('resize', () => {
@@ -113,14 +127,14 @@ function createWindow() {
 // ---- IPC: tabs + navigation (called from renderer via preload) ----
 ipcMain.handle('tab-init', () => {
   if (!activeTabId) {
-    const created = createTab('https://www.airconsole.com');
+    const created = createTab();
     showTab(created.id);
   }
   const tab = activeTab();
   return { id: activeTabId, url: tab.url, title: tab.title };
 });
 ipcMain.handle('tab-new', (_e, url) => {
-  const created = createTab(url || 'https://www.airconsole.com');
+  const created = createTab(url || HOME_URL);
   showTab(created.id);
   return { id: created.id, url: created.tab.url };
 });
@@ -136,7 +150,9 @@ ipcMain.handle('nav', (_e, action, url) => {
   if (!tab) return { url: '', canGoBack: false, canGoForward: false };
   const wc = tab.view.webContents;
   try {
-    if (action === 'go' && url) {
+    if (action === 'home' || (action === 'go' && (!url || url === HOME_DISPLAY_URL || url === 'home'))) {
+      wc.loadFile(HOME_FILE);
+    } else if (action === 'go' && url) {
       const u = /^https?:\/\//i.test(url) ? url : 'https://' + url;
       wc.loadURL(u);
     } else if (action === 'back' && wc.canGoBack()) wc.goBack();
@@ -144,7 +160,9 @@ ipcMain.handle('nav', (_e, action, url) => {
     else if (action === 'reload') wc.reload();
     else if (action === 'airconsole') wc.loadURL('https://www.airconsole.com');
   } catch (err) { console.error('nav error', err); }
-  return { url: wc.getURL(), canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward() };
+  const realUrl = wc.getURL();
+  const isHome = realUrl === HOME_URL || realUrl.startsWith('file://');
+  return { url: isHome ? HOME_DISPLAY_URL : realUrl, canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward() };
 });
 
 ipcMain.handle('set-view-bounds', (_e, bounds) => {
@@ -159,8 +177,11 @@ ipcMain.handle('set-fullscreen-game', (_e, on) => {
   const tab = activeTab();
   if (!tab) return false;
   if (on) {
+    // Leave a 40px strip at the top for the "Exit Fullscreen" bar, so there
+    // is always a visible way out (the BrowserView would cover any HTML
+    // button placed over the game area).
     const [w, h] = mainWindow.getContentSize();
-    tab.view.setBounds({ x: 0, y: 0, width: w, height: h });
+    tab.view.setBounds({ x: 0, y: 40, width: w, height: h - 40 });
     tab.view.setAutoResize({ width: true, height: true });
   } else {
     const [w, h] = mainWindow.getContentSize();
@@ -195,8 +216,33 @@ ipcMain.on('remote-input', (_e, ev) => {
   } catch (err) { console.error('remote-input error', err); }
 });
 
+// AdGuard: bundled unpacked extension (assets/extensions/adguard). In the
+// packaged app it lives unpacked next to app.asar (see asarUnpack in
+// package.json); in dev it is read from __dirname. Loading is best-effort:
+// if it fails, the browser still works, just without ad blocking.
+function adguardPath() {
+  const dev = path.join(__dirname, 'assets', 'extensions', 'adguard');
+  if (fs.existsSync(path.join(dev, 'manifest.json'))) return dev;
+  const prod = path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'extensions', 'adguard');
+  if (fs.existsSync(path.join(prod, 'manifest.json'))) return prod;
+  return null;
+}
+
 // Keep the game page's media working: allow autoplay with sound in this app.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // No File/Edit/View/Window menu bar: those actions live as icons in the
+  // sidebar instead (see index.html). On macOS this leaves only the minimal
+  // app menu (OurBeam / Quit).
+  Menu.setApplicationMenu(null);
+  const extPath = adguardPath();
+  if (extPath) {
+    try {
+      const ext = await session.defaultSession.loadExtension(extPath);
+      console.log('AdGuard loaded:', ext.name, ext.version);
+    } catch (e) { console.error('AdGuard failed to load:', e); }
+  } else {
+    console.error('AdGuard extension files not found under assets/extensions/adguard');
+  }
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(['media', 'audioCapture', 'display-capture'].includes(permission));
   });
