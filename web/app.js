@@ -39,7 +39,14 @@
     config: {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        // TURN relay (Open Relay Project — free public relay). STUN alone
+        // cannot connect two hosts behind strict NAT / CGNAT, which is the
+        // common case on home networks: without a relay the video AND the
+        // data channel (guest control) both never establish.
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
       ],
       sdpSemantics: 'unified-plan'
     }
@@ -112,11 +119,22 @@
   }
 
   // Real stats from getStats(), every 2s — same as desktop, nothing invented.
+  var lastIceState = '';
   function startStats(pc) {
     if (statsTimer) clearInterval(statsTimer);
     lastStats = null;
+    lastIceState = '';
     statsTimer = setInterval(function () {
       if (!pc) return;
+      var iceState = pc.iceConnectionState || '';
+      if (iceState !== lastIceState) {
+        lastIceState = iceState;
+        if (iceState === 'failed' || iceState === 'disconnected') {
+          setStatus('Connection failed (' + iceState + ') — the two networks could not connect directly or via relay. Try again, or try a different network (e.g. phone hotspot).', true);
+        } else if (iceState === 'connected' || iceState === 'completed') {
+          setStatus('Connected — streaming live.');
+        }
+      }
       pc.getStats().then(function (report) {
         var rttMs = null, bitrateKbps = null, fps = null, dropped = null;
         var now = Date.now();
@@ -144,7 +162,8 @@
           }
         });
         statsEl.textContent =
-          'Delay: ' + (rttMs === null ? '—' : rttMs + 'ms') +
+          'Connection: ' + (pc.iceConnectionState || '—') +
+          ' | Delay: ' + (rttMs === null ? '—' : rttMs + 'ms') +
           ' | Speed: ' + (bitrateKbps === null ? '—' : bitrateKbps + ' kbps') +
           ' | FPS: ' + (fps === null ? '—' : fps + ' fps') +
           (dropped === null ? '' : ' | Dropped: ' + dropped);
