@@ -1,15 +1,15 @@
-/* OurBeam Web 1.3.0 — black & red theme, Cairo + Chakra Petch (GX-style) */
+/* OurBeam 1.4.0 — web — black & red theme, Cairo + Chakra Petch (GX-style) */
 /* Embedded fonts: Cairo (Arabic) + Chakra Petch (GX-style English).
    Both are OFL-licensed and bundled in assets/fonts — no internet needed. */
-@font-face { font-family: 'Cairo'; src: url('../assets/fonts/Cairo.ttf') format('truetype');
+@font-face { font-family: 'Cairo'; src: url('assets/fonts/Cairo.ttf') format('truetype');
   font-weight: 200 1000; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Chakra Petch'; src: url('../assets/fonts/ChakraPetch-Regular.ttf') format('truetype');
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Regular.ttf') format('truetype');
   font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Chakra Petch'; src: url('../assets/fonts/ChakraPetch-Medium.ttf') format('truetype');
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Medium.ttf') format('truetype');
   font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Chakra Petch'; src: url('../assets/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
   font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Chakra Petch'; src: url('../assets/fonts/ChakraPetch-Bold.ttf') format('truetype');
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Bold.ttf') format('truetype');
   font-weight: 700; font-style: normal; font-display: swap; }
 
 
@@ -20,24 +20,10 @@ html, body { margin: 0; height: 100%; background: #000000; color: #f2f2f2;
 body { height: 100vh; overflow: hidden; }
 button { font-family: inherit; }
 
-/* ---------- App shell: sidebar | main | party ---------- */
+/* ---------- App shell: main | party ---------- */
 #app { display: flex; height: 100vh; direction: ltr; }
-#main { flex: 1; min-width: 0; display: flex; flex-direction: column; direction: rtl; }
-#party { direction: rtl; }
-
-/* ---------- Opera GX style sidebar ---------- */
-#sidebar { flex: none; width: 60px; background: #050505; border-inline-end: 1px solid #000;
-  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
-.side-logo { width: 40px; height: 40px; border-radius: 12px; background: #fa1e4e; color: #fff;
-  font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center;
-  margin-bottom: 6px; letter-spacing: .5px; }
-.side-btn { width: 44px; height: 44px; border-radius: 12px; border: none; background: transparent;
-  color: #9aa0a6; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.side-btn:hover { background: #1a1a1a; color: #fff; }
-.side-btn.active { background: #1a1a1a; color: #fa1e4e; }
-.side-btn.muted { color: #fa1e4e; background: #2b1218; }
-.side-btn.danger { color: #ff6b6b; }
-.side-spacer { flex: 1; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; direction: ltr; }
+#party { direction: ltr; }
 
 /* ---------- Chrome (tab strip + toolbar + room bar + status bar) ---------- */
 #chrome { flex: none; background: #0a0a0a; border-bottom: 1px solid #000;
@@ -48,12 +34,16 @@ button { font-family: inherit; }
   background: #050505; }
 .logo { font-size: 19px; font-weight: 800; color: #fa1e4e; padding: 0 8px 8px;
   letter-spacing: .3px; white-space: nowrap; }
-.tab { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 320px;
+#tabs { display: flex; align-items: flex-end; gap: 4px; min-width: 0; overflow-x: auto; }
+.tab { display: flex; align-items: center; gap: 8px; min-width: 0; width: 200px;
   background: #141414; color: #e8eaed; border: 1px solid #141414; border-bottom: none;
-  border-radius: 10px 10px 0 0; padding: 8px 14px; font-size: 13.5px; cursor: default; }
+  border-radius: 10px 10px 0 0; padding: 8px 10px 8px 14px; font-size: 13.5px; cursor: pointer; }
 .tab.active { background: #0a0a0a; }
-.tab-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #fa1e4e; }
-#tabTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-close { flex: none; background: transparent; color: #9aa0a6; border: none;
+  border-radius: 50%; width: 20px; height: 20px; font-size: 15px; line-height: 1;
+  cursor: pointer; padding: 0; }
+.tab-close:hover { background: #3c4043; color: #fff; }
 #btnNewTab { flex: none; background: transparent; color: #dadce0; border: none;
   border-radius: 50%; width: 28px; height: 28px; font-size: 19px; line-height: 1;
   cursor: pointer; margin-bottom: 4px; }
@@ -78,9 +68,15 @@ button { font-family: inherit; }
 .omnibox:focus-within { border-color: #fa1e4e; background: #1a1a1a; }
 .omnibox .lock { flex: none; color: #9aa0a6; }
 .omnibox-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: #bdc1c6; font-size: 13.5px; }
-.omnibox a.air { flex: none; background: #c40e2e; color: #fff; border-radius: 16px;
-  padding: 6px 14px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+  white-space: nowrap; color: #dadce0; font-size: 14px; }
+.omnibox a.air { flex: none; background: #c40e2e; color: #fff; text-decoration: none;
+  border-radius: 18px; padding: 7px 14px; font-size: 13.5px; font-weight: 700; }
+#address { flex: 1; min-width: 0; background: transparent; color: #fff; border: none;
+  outline: none; font-size: 14px; height: 100%; }
+#address::placeholder { color: #9aa0a6; }
+#btnGo { flex: none; background: transparent; color: #fa1e4e; border: none;
+  border-radius: 50%; width: 28px; height: 28px; font-size: 15px; cursor: pointer; }
+#btnGo:hover { background: #3c4043; }
 .room-actions { display: flex; gap: 6px; align-items: center; flex: none; flex-wrap: wrap; }
 .room-actions button { background: #1c1c1c; color: #e8eaed; border: 1px solid #1c1c1c;
   border-radius: 18px; padding: 7px 14px; cursor: pointer; font-size: 13.5px; white-space: nowrap; }
@@ -115,7 +111,10 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 .room-settings { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .room-settings select { background: #141414; color: #fff; border: 1px solid #1c1c1c;
   border-radius: 6px; padding: 5px; font-size: 13px; }
+.room-settings input[type="text"] { background: #141414; color: #fff; border: 1px solid #1c1c1c;
+  border-radius: 6px; padding: 6px 9px; font-size: 13px; width: 130px; }
 .check { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.name-field { display: flex; align-items: center; gap: 6px; }
 
 /* Status bar */
 #statusbar { display: flex; align-items: center; gap: 14px; padding: 5px 14px 7px;
@@ -171,7 +170,8 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 /* ---------- Hyperbeam style party panel ---------- */
 #party { flex: none; width: 250px; background: #050505; border-inline-start: 1px solid #000;
   padding: 16px 14px; overflow-y: auto; }
-#party h3 { margin: 0 0 12px; font-size: 15px; color: #fff; }
+#party h3 { margin: 0 0 12px; font-size: 15px; color: #fff; display: flex; align-items: baseline; gap: 8px; }
+.online-count { color: #3ba55d; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .party-code { background: #1a0508; border: 1px solid #fa1e4e; border-radius: 10px;
   padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .party-code span { color: #ff8a9a; font-size: 12px; }
@@ -182,7 +182,7 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 .members { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
 .member { display: flex; align-items: center; gap: 9px; background: #0d0d0d;
   border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-.member em { margin-inline-start: auto; font-style: normal; color: #9aa0a6; font-size: 12.5px; }
+.member em { margin-inline-start: auto; font-style: normal; color: #9aa0a6; font-size: 12.5px; white-space: nowrap; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: none; }
 .dot.online { background: #3ba55d; box-shadow: 0 0 6px #3ba55d; }
 .party-note { color: #9aa0a6; font-size: 12.5px; line-height: 1.8; margin-top: 16px; }

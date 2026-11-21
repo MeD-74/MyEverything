@@ -5,6 +5,7 @@
 //   - Same Google STUN servers, same DataConnection control protocol:
 //     {type:'mousemove'|'mousedown'|'mouseup'|'wheel'|'keydown'|'keyup',
 //      x:0..1, y:0..1, deltaY, key, button}
+//     plus {type:'hello', name} — each side sends its display name on connect.
 //   - Same MediaConnection for video+audio stream, same getStats() stats bar.
 // Compatibility truth (see README):
 //   - Desktop host -> web guest: FULL (watch + remote control works, the
@@ -29,7 +30,7 @@
   function setBadge(text, cls) { badgeEl.textContent = text; badgeEl.className = 'badge ' + (cls || ''); }
 
   if (typeof Peer === 'undefined') {
-    setStatus('مكتبة PeerJS مش متحمّلة — اتأكد إن ملف vendor/peerjs.min.js موجود جنب الصفحة.', true);
+    setStatus('PeerJS library did not load — make sure vendor/peerjs.min.js is next to this page.', true);
     return;
   }
 
@@ -45,21 +46,48 @@
   };
 
   var QUALITY = {
-    race: { label: 'سباق — 720p / 60fps', width: 1280, height: 720, frameRate: 60 },
-    hd:   { label: 'جودة عالية — 1080p / 30fps', width: 1920, height: 1080, frameRate: 30 },
-    cinema: { label: 'سينما — 1080p / 60fps', width: 1920, height: 1080, frameRate: 60 },
-    low:  { label: 'نت ضعيف — 480p / 30fps', width: 854, height: 480, frameRate: 30 }
+    race: { label: 'Race — 720p / 60fps', width: 1280, height: 720, frameRate: 60 },
+    hd:   { label: 'High quality — 1080p / 30fps', width: 1920, height: 1080, frameRate: 30 },
+    cinema: { label: 'Cinema — 1080p / 60fps', width: 1920, height: 1080, frameRate: 60 },
+    low:  { label: 'Weak connection — 480p / 30fps', width: 854, height: 480, frameRate: 30 }
   };
 
   var peer = null, role = null, roomCode = null;
   var hostStream = null, micStream = null, activeCall = null, dataConn = null;
   var statsTimer = null, lastStats = null;
 
-  function peerErrorArabic(err) {
+  // ---------- Names: each side sets its display name; it is exchanged with
+  // the peer over the data connection so the party panel shows real names. ----------
+  var NAME_KEY = 'ourbeam-name';
+  var myName = '', peerName = '', peerOnline = false;
+  try { myName = localStorage.getItem(NAME_KEY) || ''; } catch (e) {}
+  $('myName').value = myName;
+  function displayName(name, fallback) { var n = (name || '').trim(); return n || fallback; }
+  function renderParty() {
+    var hostName = role === 'host' ? displayName(myName, 'Host') : displayName(peerName, 'Host');
+    $('roomTitle').textContent = hostName + "'s Room";
+    $('onlineCount').textContent = '● ' + (peerOnline ? 2 : 1) + ' online';
+    $('memberMeName').textContent = displayName(myName, 'You') + ' (you)';
+    $('myRole').textContent = role === 'host' ? 'Host' : 'Guest';
+    $('memberPeerName').textContent = peerOnline ? displayName(peerName, 'Guest') : 'Guest';
+  }
+  function setPeerName(name) { peerName = name || ''; peerOnline = true; renderParty(); }
+  function clearPeer() { peerName = ''; peerOnline = false; renderParty(); }
+  function sendHello() {
+    if (dataConn && dataConn.open) { try { dataConn.send({ type: 'hello', name: myName }); } catch (e) {} }
+  }
+  $('myName').addEventListener('input', function (e) {
+    myName = e.target.value;
+    try { localStorage.setItem(NAME_KEY, myName); } catch (err) {}
+    renderParty();
+    sendHello();
+  });
+
+  function peerErrorEnglish(err) {
     var t = (err && err.type) || '';
-    if (t === 'peer-unavailable') return 'الغرفة مش موجودة أو المضيف لسه ما فتحش — اتأكد من الكود إن المضيف فاتح البرنامج/الصفحة.';
-    if (t === 'network' || t === 'server-error') return 'مش قادر أوصل لسيرفر الإشارة — اتأكد من النت وحاول تاني.';
-    return 'حصلت مشكلة في الاتصال: ' + (err && err.message ? err.message : t);
+    if (t === 'peer-unavailable') return 'Room not found or the host has not opened it yet — check the code and make sure the host has the app/page open.';
+    if (t === 'network' || t === 'server-error') return 'Cannot reach the room server — check your internet and try again.';
+    return 'Connection problem: ' + (err && err.message ? err.message : t);
   }
 
   function stopTracks(stream) {
@@ -111,10 +139,10 @@
           }
         });
         statsEl.textContent =
-          'التأخير: ' + (rttMs === null ? '—' : rttMs + 'ms') +
-          ' | السرعة: ' + (bitrateKbps === null ? '—' : bitrateKbps + ' kbps') +
-          ' | الصورة: ' + (fps === null ? '—' : fps + ' fps') +
-          (dropped === null ? '' : ' | ساقط: ' + dropped);
+          'Delay: ' + (rttMs === null ? '—' : rttMs + 'ms') +
+          ' | Speed: ' + (bitrateKbps === null ? '—' : bitrateKbps + ' kbps') +
+          ' | FPS: ' + (fps === null ? '—' : fps + ' fps') +
+          (dropped === null ? '' : ' | Dropped: ' + dropped);
         warnEl.hidden = !(rttMs !== null && rttMs > 250);
       }).catch(function () { /* stats are best-effort */ });
     }, 2000);
@@ -125,7 +153,7 @@
   function acquireHostStream() {
     var q = QUALITY[$('quality').value] || QUALITY.race;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      return Promise.reject(new Error('المتصفح ده مش بيدعم مشاركة الشاشة — استخدم Chrome أو Edge.'));
+      return Promise.reject(new Error('This browser does not support screen sharing — use Chrome or Edge.'));
     }
     return navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: q.width }, height: { ideal: q.height }, frameRate: { ideal: q.frameRate } },
@@ -140,7 +168,7 @@
           vt.applyConstraints({ width: q.width, height: q.height, frameRate: q.frameRate }).catch(function () {});
         }
         vt.addEventListener('ended', function () {
-          setStatus('مشاركة الشاشة اتقفلت — دوس "استضيف غرفة" تاني عشان تبث من جديد.', true);
+          setStatus('Screen sharing stopped — click "Host Room" again to stream again.', true);
         });
       }
       if ($('micOn').checked) {
@@ -149,7 +177,7 @@
           mic.getAudioTracks().forEach(function (t) { hostStream.addTrack(t); });
           return hostStream;
         }).catch(function () {
-          setStatus('المايك مش متاح — البث هيكمل من غير صوت مايك.', true);
+          setStatus('Mic not available — streaming without mic audio.', true);
           return hostStream;
         });
       }
@@ -171,7 +199,7 @@
   function showParty(asRole) {
     $('party').hidden = false;
     $('partyCode').textContent = roomCode || '------';
-    $('myRole').textContent = asRole === 'host' ? 'مضيف' : 'ضيف';
+    renderParty();
   }
 
   function showHostCode(code) {
@@ -179,23 +207,22 @@
     $('roomCode').textContent = code;
     $('btnLeave').hidden = false;
     $('btnLeave2').hidden = false;
-    $('sideLeave').hidden = false;
     $('homeHint').hidden = true;
     $('btnRetryHost').hidden = true;
-    setGuestState('مستني الضيف يدخل…', false);
+    setGuestState('Waiting for guest…', false);
     showParty('host');
   }
 
   function startHosting(keepCode) {
-    if (peer) { setStatus('انت متصل أصلاً — دوس مغادرة الأول.', true); return; }
+    if (peer) { setStatus('You are already connected — leave the room first.', true); return; }
     if (hostStarting) return;
     hostStarting = true;
     roomCode = (keepCode && roomCode) ? roomCode : String(Math.floor(100000 + Math.random() * 900000));
     role = 'host';
     // 1) The code goes on screen RIGHT NOW.
     showHostCode(roomCode);
-    setBadge('جاري الاتصال…', 'connecting');
-    setStatus('الكود بتاعك: ' + roomCode + ' — جاري الاتصال بسيرفر الغرف… ابعته للطرف التاني من دلوقتي.');
+    setBadge('Connecting…', 'connecting');
+    setStatus('Your code: ' + roomCode + ' — connecting to the room server… send it to the other person now.');
     // 2) Create the peer (cheap) and open the share picker in the same gesture.
     peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
     var opened = false;
@@ -203,51 +230,54 @@
     openTimer = setTimeout(function () {
       if (opened) return;
       hostStarting = false;
-      setBadge('مش متصل', '');
-      setStatus('سيرفر الغرف مش بيرد — اتأكد من النت ودوس "إعادة المحاولة". الكود لسه: ' + roomCode, true);
+      setBadge('Not connected', '');
+      setStatus('Room server is not responding — check your internet and click "Retry". Your code is still: ' + roomCode, true);
       $('btnRetryHost').hidden = false;
     }, 15000);
     peer.on('open', function () {
       opened = true;
       if (openTimer) clearTimeout(openTimer);
       hostStarting = false;
-      setBadge('مضيف (ويب)', 'live');
+      setBadge('Host (web)', 'live');
       controlWarnEl.hidden = false;
       saveRecent(roomCode, 'host');
-      setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للطرف التاني، وهو يدخل من جهازه (ديسكتوب أو ويب).');
+      setStatus('Room is open — code: ' + roomCode + '. Send it to the other person, they can join from their device (desktop or web).');
     });
     peer.on('call', function (call) {
       activeCall = call;
       call.answer(hostStream || new MediaStream());
-      call.on('close', function () { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); setGuestState('مستني الضيف يدخل…', false); activeCall = null; });
-      call.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
+      call.on('close', function () { setStatus('Guest left. The room is still open with code ' + roomCode + '.'); setGuestState('Waiting for guest…', false); clearPeer(); activeCall = null; });
+      call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
       startStats(call.peerConnection);
-      setGuestState('الضيف متصل — البث شغال', true);
-      setStatus('الضيف دخل الغرفة — البث شغال لحظياً. (التحكم من الضيف مش متاح في نسخة الويب كمضيف.)');
+      setGuestState('Guest connected — streaming live', true);
+      setStatus('Guest joined the room — streaming live. (Guest control is not available with a web host.)');
     });
     peer.on('connection', function (conn) {
       dataConn = conn;
       conn.on('data', function (ev) {
+        if (!ev || !ev.type) return;
+        if (ev.type === 'hello') { setPeerName(ev.name); setGuestState(displayName(ev.name, 'Guest') + ' is connected', true); return; }
         // Web host CANNOT inject this into the shared tab — browser sandbox.
         // We acknowledge it and keep the warning visible; never pretend it worked.
-        if (ev && ev.type) setStatus('الضيف بيحاول يتحكم، بس نسخة الويب كمضيف مش بتقدر تنفذ التحكم — المشاهدة والصوت شغالين. لو عايز تحكم كامل، المضيف يبقى نسخة الديسكتوب.');
+        setStatus('The guest is trying to control, but the web host cannot apply control — watching and voice still work. For full control, the host should use the desktop app.');
       });
+      conn.on('open', function () { sendHello(); });
     });
     peer.on('error', function (e) {
-      setStatus(peerErrorArabic(e), true);
-      if (!opened) { setBadge('مش متصل', ''); $('btnRetryHost').hidden = false; }
+      setStatus(peerErrorEnglish(e), true);
+      if (!opened) { setBadge('Not connected', ''); $('btnRetryHost').hidden = false; }
     });
     peer.on('disconnected', function () {
-      setStatus('الاتصال بسيرفر الغرف اتقطع — بيحاول يرجع…');
+      setStatus('Connection to the room server dropped — reconnecting…');
       try { peer.reconnect(); } catch (e) {}
     });
     // 3) Screen/tab capture (picker) — runs in parallel with signalling.
-    setStatus('اختار تبويب AirConsole من نافذة المشاركة، وعلّم على "Share tab audio" عشان صوت اللعبة يوصل. الكود بتاعك: ' + roomCode);
+    setStatus('Pick the AirConsole tab in the share window, and tick "Share tab audio" so the game sound comes through. Your code: ' + roomCode);
     acquireHostStream().then(function () {
-      setStatus('البث جاهز — الكود: ' + roomCode + '. ابعته للطرف التاني.');
+      setStatus('Stream is ready — code: ' + roomCode + '. Send it to the other person.');
     }).catch(function (e) {
       // Keep the room + code: the peer is alive, only capture failed.
-      setStatus('الغرفة مفتوحة بالكود ' + roomCode + ' بس مشاركة الشاشة ما تمتش: ' + (e && e.message ? e.message : e) + ' — دوس "إعادة المحاولة".', true);
+      setStatus('Room is open with code ' + roomCode + ' but screen sharing did not start: ' + (e && e.message ? e.message : e) + ' — click "Retry".', true);
       $('btnRetryHost').hidden = false;
     });
   }
@@ -262,31 +292,34 @@
 
   function startJoining() {
     var code = $('joinCode').value.trim();
-    if (!/^\d{6}$/.test(code)) { setStatus('اكتب كود الغرفة — 6 أرقام.', true); return; }
-    if (peer) { setStatus('انت متصل أصلاً — دوس مغادرة الأول.', true); return; }
+    if (!/^\d{6}$/.test(code)) { setStatus('Type the room code — 6 digits.', true); return; }
+    if (peer) { setStatus('You are already connected — leave the room first.', true); return; }
     role = 'guest';
     roomCode = code;
-    setBadge('ضيف', 'guest');
-    setStatus('بيتصل بالمضيف...');
+    setBadge('Guest', 'guest');
+    setStatus('Connecting to the host...');
     var micPromise = Promise.resolve(null);
     if ($('micOn').checked && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       micPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(function (m) {
         micStream = m; return m;
-      }).catch(function () { setStatus('المايك مش متاح — هتكمل من غير صوت مايك.', true); return null; });
+      }).catch(function () { setStatus('Mic not available — continuing without mic audio.', true); return null; });
     }
     micPromise.then(function (mic) {
       peer = new Peer(PEER_CONFIG);
       var guestOpened = false;
       var guestTimer = setTimeout(function () {
-        if (!guestOpened) setStatus('سيرفر الغرف مش بيرد — اتأكد من النت وحاول تاني.', true);
+        if (!guestOpened) setStatus('Room server is not responding — check your internet and try again.', true);
       }, 15000);
       peer.on('open', function () {
         guestOpened = true;
         clearTimeout(guestTimer);
         var conn = peer.connect('ourbeam-' + code, { reliable: true });
         dataConn = conn;
-        conn.on('open', function () { setStatus('متصل بالمضيف — جاري استقبال البث...'); });
-        conn.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
+        conn.on('open', function () { sendHello(); setStatus('Connected to the host — receiving the stream...'); });
+        conn.on('data', function (ev) {
+          if (ev && ev.type === 'hello') { setPeerName(ev.name); setGuestState(displayName(ev.name, 'Host') + ' is streaming', true); }
+        });
+        conn.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
         var call = peer.call('ourbeam-' + code, mic || new MediaStream());
         activeCall = call;
         call.on('stream', function (remoteStream) {
@@ -297,22 +330,22 @@
           $('homeHint').hidden = true;
           $('btnLeave').hidden = false;
           $('btnLeave2').hidden = false;
-          $('sideLeave').hidden = false;
           showParty('guest');
           saveRecent(code, 'guest');
-          setStatus('البث شغال — دي نفس شاشة المضيف لحظياً. موبايلك هو دراع AirConsole.');
+          setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
         });
-        call.on('close', function () { setStatus('المضيف قفل البث.', true); });
-        call.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
+        call.on('close', function () { setStatus('The host closed the stream.', true); });
+        call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
         startStats(call.peerConnection);
       });
-      peer.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
+      peer.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
     });
   }
 
   function leaveRoom() {
     destroyPeer();
     role = null; roomCode = null; hostStarting = false;
+    clearPeer();
     micMuted = false; updateMicButtons();
     $('viewerWrap').hidden = true;
     $('homeHint').hidden = false;
@@ -320,16 +353,15 @@
     $('joinBox').hidden = true;
     $('btnLeave').hidden = true;
     $('btnLeave2').hidden = true;
-    $('sideLeave').hidden = true;
     $('party').hidden = true;
     $('btnRetryHost').hidden = true;
-    setGuestState('مستني الضيف يدخل…', false);
+    setGuestState('Waiting for guest…', false);
     controlWarnEl.hidden = true;
     var v = $('remoteVideo'); v.srcObject = null;
-    statsEl.textContent = 'التأخير: — | السرعة: — | الصورة: —';
+    statsEl.textContent = 'Delay: — | Speed: — | FPS: —';
     warnEl.hidden = true;
-    setBadge('مش متصل', '');
-    setStatus('خرجت من الغرفة. استضيف غرفة أو انضم بكود تاني.');
+    setBadge('Not connected', '');
+    setStatus('You left the room. Host a room or join with another code.');
   }
 
   // Guest input: same relative-coords protocol as desktop.
@@ -352,10 +384,10 @@
     v.addEventListener('wheel', function (e) { e.preventDefault(); var p = relPos(e); sendInput({ type: 'wheel', deltaY: e.deltaY, x: p.x, y: p.y }); }, { passive: false });
     v.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     window.addEventListener('keydown', function (e) {
-      if (role === 'guest' && document.activeElement !== $('joinCode')) sendInput({ type: 'keydown', key: e.key });
+      if (role === 'guest' && document.activeElement !== $('joinCode') && document.activeElement !== $('myName')) sendInput({ type: 'keydown', key: e.key });
     });
     window.addEventListener('keyup', function (e) {
-      if (role === 'guest' && document.activeElement !== $('joinCode')) sendInput({ type: 'keyup', key: e.key });
+      if (role === 'guest' && document.activeElement !== $('joinCode') && document.activeElement !== $('myName')) sendInput({ type: 'keyup', key: e.key });
     });
   })();
 
@@ -370,46 +402,42 @@
   $('btnCopyCode').addEventListener('click', function () {
     var code = roomCode || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(function () { setStatus('الكود اتنسخ: ' + code); })
-        .catch(function () { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); });
-    } else { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); }
+      navigator.clipboard.writeText(code).then(function () { setStatus('Code copied: ' + code); })
+        .catch(function () { setStatus('Code: ' + code + ' — copy it manually.', true); });
+    } else { setStatus('Code: ' + code + ' — copy it manually.', true); }
   });
   $('btnLeave').addEventListener('click', leaveRoom);
   $('btnLeave2').addEventListener('click', leaveRoom);
-  $('sideLeave').addEventListener('click', leaveRoom);
   $('btnOpenBrowser').addEventListener('click', function () { window.open('https://www.airconsole.com', '_blank'); });
   $('btnFullscreen2').addEventListener('click', function () {
     var el = $('viewerWrap').hidden ? document.documentElement : $('viewerWrap');
     if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); }
     else if (el.requestFullscreen) { el.requestFullscreen().catch(function () {}); }
   });
-  $('sideFullscreen').addEventListener('click', function () { $('btnFullscreen2').click(); });
   $('btnCopyCode2').addEventListener('click', function () {
     var code = roomCode || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(function () { setStatus('الكود اتنسخ: ' + code); })
-        .catch(function () { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); });
-    } else { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); }
+      navigator.clipboard.writeText(code).then(function () { setStatus('Code copied: ' + code); })
+        .catch(function () { setStatus('Code: ' + code + ' — copy it manually.', true); });
+    } else { setStatus('Code: ' + code + ' — copy it manually.', true); }
   });
   $('guestVolume').addEventListener('input', function (e) { $('remoteVideo').volume = e.target.value / 100; });
 
-  // ---------- Mic mute (bottom bar + sidebar) ----------
+  // ---------- Mic mute (bottom bar) ----------
   var micMuted = false;
   function updateMicButtons() {
-    var b = $('btnMicMute'), s = $('sideMic');
+    var b = $('btnMicMute');
     b.classList.toggle('muted', micMuted);
-    s.classList.toggle('muted', micMuted);
-    b.querySelector('span').textContent = micMuted ? 'المايك مكتوم' : 'المايك شغال';
+    b.querySelector('span').textContent = micMuted ? 'Mic muted' : 'Mic on';
   }
   function toggleMicMute() {
     micMuted = !micMuted;
     var apply = function (stream) { if (stream) stream.getAudioTracks().forEach(function (t) { t.enabled = !micMuted; }); };
     apply(micStream); apply(hostStream);
     updateMicButtons();
-    setStatus(micMuted ? 'المايك مكتوم — الضيف مش هيسمعك.' : 'المايك شغال تاني.');
+    setStatus(micMuted ? 'Mic muted — the guest cannot hear you.' : 'Mic is on again.');
   }
   $('btnMicMute').addEventListener('click', toggleMicMute);
-  $('sideMic').addEventListener('click', toggleMicMute);
 
   // ---------- LOAD SAVE: recent rooms (localStorage) ----------
   var RECENT_KEY = 'ourbeam-recent';
@@ -432,11 +460,11 @@
       var row = document.createElement('div');
       row.className = 'save-row';
       var when = new Date(item.ts);
-      var whenText = when.toLocaleDateString('ar-EG') + ' ' + when.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      var whenText = when.toLocaleDateString('en-GB') + ' ' + when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       row.innerHTML = '<span class="save-code" dir="ltr">' + item.code + '</span>' +
-        '<span class="save-meta">' + (item.role === 'host' ? 'استضفتها' : 'انضميت ليها') + ' — ' + whenText + '</span>';
+        '<span class="save-meta">' + (item.role === 'host' ? 'Hosted' : 'Joined') + ' — ' + whenText + '</span>';
       var btn = document.createElement('button');
-      btn.textContent = item.role === 'host' ? 'استضيف تاني' : 'انضم تاني';
+      btn.textContent = item.role === 'host' ? 'Host again' : 'Join again';
       btn.addEventListener('click', function () {
         if (item.role === 'host') { roomCode = item.code; startHosting(true); }
         else { $('joinCode').value = item.code; $('joinBox').hidden = false; startJoining(); }
@@ -446,15 +474,16 @@
     });
   }
   renderRecent();
+  renderParty();
   $('quality').addEventListener('change', function () {
-    if (role !== 'host' || !hostStream) { setStatus('الجودة اتغيرت — هتتطبق لما تستضيف غرفة.'); return; }
+    if (role !== 'host' || !hostStream) { setStatus('Quality changed — it will apply when you host a room.'); return; }
     var q = QUALITY[$('quality').value] || QUALITY.race;
     var vt = hostStream.getVideoTracks()[0];
     if (vt && vt.applyConstraints) {
       vt.applyConstraints({ width: q.width, height: q.height, frameRate: q.frameRate })
-        .then(function () { setStatus('الجودة اتغيرت لـ ' + q.label + '.'); })
-        .catch(function () { setStatus('المتصفح ما قدرش يطبق الجودة دي على البث الحالي — وقّف المشاركة وابدأ من جديد.', true); });
+        .then(function () { setStatus('Quality changed to ' + q.label + '.'); })
+        .catch(function () { setStatus('The browser could not apply this quality to the current stream — stop sharing and start again.', true); });
     }
   });
-  $('micOn').addEventListener('change', function () { setStatus('إعداد المايك هيتطبق في الاتصال الجاي.'); });
+  $('micOn').addEventListener('change', function () { setStatus('Mic setting will apply on the next connection.'); });
 })();
