@@ -1,22 +1,30 @@
 // OurBeam — Main process (Electron 45)
-// - Main window: Arabic RTL UI (renderer)
-// - BrowserView: the shared Chromium browser (AirConsole by default)
+// - Main window: English LTR UI (renderer)
+// - Real tabs: one BrowserView per tab (AirConsole by default). Tabs can be
+//   opened (+), closed (x) and switched — each keeps its own page.
 // - Host capture is done in the renderer via desktopCapturer + getUserMedia
-//   (see renderer.js startHostStream). This process only owns the BrowserView
-//   and injects remote input into it via webContents.sendInputEvent.
+//   (see renderer.js startHostStream). This process only owns the BrowserViews
+//   and injects remote input into the active one via webContents.sendInputEvent.
 const { app, BrowserWindow, BrowserView, ipcMain, session } = require('electron');
 const path = require('path');
 
 let mainWindow = null;
-let view = null;
 // The renderer measures the real stage rect and reports it via
 // 'set-view-bounds'; this is only the fallback until the first report.
-let viewBounds = { x: 60, y: 140, width: 1220, height: 660 };
+let viewBounds = { x: 0, y: 140, width: 1280, height: 660 };
 let allowControl = true;
 let fullscreenGame = false;
 
-function createView() {
-  view = new BrowserView({
+// ---- Tabs: id -> { view, url, title } ----
+const tabs = new Map();
+let tabCounter = 0;
+let activeTabId = null;
+
+function activeTab() { return tabs.get(activeTabId) || null; }
+
+function createTab(url) {
+  const id = 'tab-' + (++tabCounter);
+  const view = new BrowserView({
     webPreferences: {
       // AirConsole needs a modern Chromium with WebGL / WebAudio / autoplay.
       // No node inside the game page itself.
@@ -25,17 +33,13 @@ function createView() {
       sandbox: false,
     },
   });
-  mainWindow.setBrowserView(view);
-  view.setBounds(viewBounds);
-  view.setAutoResize({ width: true, height: true });
-  view.webContents.loadURL('https://www.airconsole.com');
-  // Keep the tab title + address bar live as the user navigates inside the game page.
+  const tab = { view, url: url || 'https://www.airconsole.com', title: 'New Tab' };
+  tabs.set(id, tab);
   const sendPageInfo = () => {
     try {
-      mainWindow.webContents.send('page-info', {
-        title: view.webContents.getTitle() || view.webContents.getURL(),
-        url: view.webContents.getURL(),
-      });
+      tab.url = view.webContents.getURL();
+      tab.title = view.webContents.getTitle() || tab.url;
+      mainWindow.webContents.send('page-info', { tabId: id, title: tab.title, url: tab.url });
     } catch (e) {}
   };
   view.webContents.on('page-title-updated', sendPageInfo);
@@ -43,6 +47,35 @@ function createView() {
   view.webContents.on('did-navigate-in-page', sendPageInfo);
   // AirConsole games want audio without a user gesture on the console page.
   view.webContents.setAudioMuted(false);
+  view.setBounds(viewBounds);
+  view.setAutoResize({ width: true, height: true });
+  view.webContents.loadURL(tab.url);
+  return { id, tab };
+}
+
+function showTab(id) {
+  const tab = tabs.get(id);
+  if (!tab || !mainWindow) return false;
+  activeTabId = id;
+  if (!fullscreenGame) tab.view.setBounds(viewBounds);
+  mainWindow.setBrowserView(tab.view);
+  return true;
+}
+
+function closeTab(id) {
+  const tab = tabs.get(id);
+  if (!tab) return { closed: false, activeId: activeTabId };
+  try { mainWindow.removeBrowserView(tab.view); } catch (e) {}
+  try { tab.view.webContents.destroy(); } catch (e) {}
+  tabs.delete(id);
+  // Never leave the window without a tab: open a fresh one instead.
+  if (tabs.size === 0) {
+    const created = createTab('https://www.airconsole.com');
+    showTab(created.id);
+  } else if (activeTabId === id) {
+    showTab([...tabs.keys()][tabs.size - 1]);
+  }
+  return { closed: true, activeId: activeTabId };
 }
 
 function createWindow() {
@@ -51,7 +84,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'OurBeam — متصفح مشترك',
+    title: 'OurBeam — Shared Browser',
     backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -62,22 +95,46 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
-  createView();
+  const first = createTab('https://www.airconsole.com');
+  showTab(first.id);
 
   mainWindow.on('resize', () => {
-    if (!view || fullscreenGame) return;
+    if (fullscreenGame) return;
+    const tab = activeTab();
+    if (!tab) return;
     const [w, h] = mainWindow.getContentSize();
     viewBounds = { x: viewBounds.x, y: viewBounds.y, width: w - viewBounds.x, height: h - viewBounds.y };
-    view.setBounds(viewBounds);
+    tab.view.setBounds(viewBounds);
   });
 
-  mainWindow.on('closed', () => { mainWindow = null; view = null; });
+  mainWindow.on('closed', () => { mainWindow = null; tabs.clear(); activeTabId = null; });
 }
 
-// ---- IPC: navigation / view control (called from renderer via preload) ----
+// ---- IPC: tabs + navigation (called from renderer via preload) ----
+ipcMain.handle('tab-init', () => {
+  if (!activeTabId) {
+    const created = createTab('https://www.airconsole.com');
+    showTab(created.id);
+  }
+  const tab = activeTab();
+  return { id: activeTabId, url: tab.url, title: tab.title };
+});
+ipcMain.handle('tab-new', (_e, url) => {
+  const created = createTab(url || 'https://www.airconsole.com');
+  showTab(created.id);
+  return { id: created.id, url: created.tab.url };
+});
+ipcMain.handle('tab-close', (_e, id) => closeTab(id));
+ipcMain.handle('tab-switch', (_e, id) => {
+  const ok = showTab(id);
+  const tab = activeTab();
+  return { ok, activeId: activeTabId, url: tab ? tab.url : '' };
+});
+
 ipcMain.handle('nav', (_e, action, url) => {
-  if (!view) return { url: '', canGoBack: false, canGoForward: false };
-  const wc = view.webContents;
+  const tab = activeTab();
+  if (!tab) return { url: '', canGoBack: false, canGoForward: false };
+  const wc = tab.view.webContents;
   try {
     if (action === 'go' && url) {
       const u = /^https?:\/\//i.test(url) ? url : 'https://' + url;
@@ -92,21 +149,23 @@ ipcMain.handle('nav', (_e, action, url) => {
 
 ipcMain.handle('set-view-bounds', (_e, bounds) => {
   viewBounds = bounds;
-  if (view && !fullscreenGame) view.setBounds(bounds);
+  const tab = activeTab();
+  if (tab && !fullscreenGame) tab.view.setBounds(bounds);
   return true;
 });
 
 ipcMain.handle('set-fullscreen-game', (_e, on) => {
   fullscreenGame = !!on;
-  if (!view) return false;
+  const tab = activeTab();
+  if (!tab) return false;
   if (on) {
     const [w, h] = mainWindow.getContentSize();
-    view.setBounds({ x: 0, y: 0, width: w, height: h });
-    view.setAutoResize({ width: true, height: true });
+    tab.view.setBounds({ x: 0, y: 0, width: w, height: h });
+    tab.view.setAutoResize({ width: true, height: true });
   } else {
     const [w, h] = mainWindow.getContentSize();
     viewBounds = { x: viewBounds.x, y: viewBounds.y, width: w - viewBounds.x, height: h - viewBounds.y };
-    view.setBounds(viewBounds);
+    tab.view.setBounds(viewBounds);
   }
   return fullscreenGame;
 });
@@ -115,18 +174,19 @@ ipcMain.handle('set-allow-control', (_e, on) => { allowControl = !!on; return al
 
 // ---- IPC: remote input from the guest (relative 0..1 coords from viewer video) ----
 ipcMain.on('remote-input', (_e, ev) => {
-  if (!view || !allowControl) return;
-  const wc = view.webContents;
-  const b = view.getBounds();
+  const tab = activeTab();
+  if (!tab || !allowControl) return;
+  const wc = tab.view.webContents;
+  const b = tab.view.getBounds();
   const x = Math.round((ev.x || 0) * b.width);
   const y = Math.round((ev.y || 0) * b.height);
   try {
     if (ev.type === 'mousemove') {
       wc.sendInputEvent({ type: 'mouseMove', x, y });
     } else if (ev.type === 'mousedown') {
-      wc.sendInputEvent({ type: 'mouseDown', x, y, button: ev.button || 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mousedown', x, y, button: ev.button || 'left', clickCount: 1 });
     } else if (ev.type === 'mouseup') {
-      wc.sendInputEvent({ type: 'mouseUp', x, y, button: ev.button || 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mouseup', x, y, button: ev.button || 'left', clickCount: 1 });
     } else if (ev.type === 'wheel') {
       wc.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY: ev.deltaY || 0 });
     } else if (ev.type === 'keydown' || ev.type === 'keyup') {

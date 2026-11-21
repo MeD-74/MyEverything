@@ -1,103 +1,83 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OurBeam — متصفح مشترك</title>
+<title>OurBeam — Shared Browser</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="app">
-  <!-- Opera GX style: slim icon sidebar -->
-  <nav id="sidebar">
-    <div class="side-logo" title="OurBeam">OB</div>
-    <button id="sideAirconsole" class="side-btn" title="AirConsole — العب">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7.2 2.4L13 13.5h-2l-1.8 1.9A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5zm-1.5 7v1.5h2V13h-2zM9 12.5h1.5v1.5H9v-1.5zm4.5.5h2v2h-2v-2zm3-3h2v2h-2V10z"/></svg>
-    </button>
-    <button id="sideYoutube" class="side-btn" title="يوتيوب — اتفرج">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M22 8.2a3 3 0 0 0-2.1-2.1C18 5.5 12 5.5 12 5.5s-6 0-7.9.6A3 3 0 0 0 2 8.2 31 31 0 0 0 1.6 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2.1 2.1c1.9.6 7.9.6 7.9.6s6 0 7.9-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 22.4 12 31 31 0 0 0 22 8.2zM10 15V9l5.2 3L10 15z"/></svg>
-    </button>
-    <button id="sideFullscreen" class="side-btn" title="ملء الشاشة">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm12 0h2v6h-6v-2h4v-4z"/></svg>
-    </button>
-    <div class="side-spacer"></div>
-    <button id="sideMic" class="side-btn" title="كتم المايك">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>
-    </button>
-    <button id="sideLeave" class="side-btn danger" title="مغادرة الغرفة" hidden>
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm4.3 11.3-1.4 1.4-2.9-2.9v5.2h-2v-5.2l-2.9 2.9-1.4-1.4L12 7l4.3 6.3z" transform="rotate(90 12 12)"/></svg>
-    </button>
-  </nav>
-
   <div id="main">
     <header id="chrome">
-      <!-- Tab strip, like a real browser -->
+      <!-- Tab strip: real tabs, each with a close button -->
       <div id="tabstrip">
         <div class="logo">OurBeam</div>
-        <div class="tab active" id="currentTab" title="التبويب الحالي">
-          <span class="tab-dot"></span>
-          <span id="tabTitle">AirConsole — العب مع بعض</span>
-        </div>
-        <button id="btnNewTab" title="تبويب جديد — AirConsole">+</button>
+        <div id="tabs"></div>
+        <button id="btnNewTab" title="New tab — AirConsole">+</button>
         <div class="tabstrip-spacer"></div>
-        <span id="roleBadge" class="badge">مش متصل</span>
+        <span id="roleBadge" class="badge">Not connected</span>
       </div>
 
       <!-- Toolbar: navigation + address bar + room actions -->
       <div id="toolbar">
         <div class="navbtns">
-          <button id="btnBack" title="رجوع">‹</button>
-          <button id="btnForward" title="قدام">›</button>
-          <button id="btnReload" title="تحديث">↻</button>
+          <button id="btnBack" title="Back">‹</button>
+          <button id="btnForward" title="Forward">›</button>
+          <button id="btnReload" title="Reload">↻</button>
         </div>
         <div class="omnibox">
           <svg class="lock" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9z"/></svg>
-          <input id="address" type="text" value="https://www.airconsole.com" dir="ltr" placeholder="ابحث أو اكتب رابط الموقع..." spellcheck="false" autocomplete="off">
-          <button id="btnGo" title="روح">➜</button>
+          <input id="address" type="text" value="https://www.airconsole.com" dir="ltr" placeholder="Search or type a URL..." spellcheck="false" autocomplete="off">
+          <button id="btnGo" title="Go">➜</button>
         </div>
         <div class="room-actions">
           <button id="btnAirconsole" class="air">AirConsole</button>
-          <button id="btnHost" class="primary">استضيف غرفة</button>
-          <button id="btnJoinShow">انضم لغرفة</button>
-          <button id="btnFullscreen">ملء الشاشة</button>
-          <button id="btnLeave" class="danger" hidden>مغادرة</button>
+          <button id="btnYoutube" class="air">YouTube</button>
+          <button id="btnHost" class="primary">Host Room</button>
+          <button id="btnJoinShow">Join Room</button>
+          <button id="btnFullscreen">Fullscreen</button>
+          <button id="btnLeave" class="danger" hidden>Leave</button>
         </div>
       </div>
 
-      <!-- Room bar: the code, join box, settings -->
+      <!-- Room bar: the code, join box, settings, your name -->
       <div id="roombar">
         <div id="hostBox" class="codepill" hidden>
-          <span class="code-label">كود الغرفة</span>
+          <span class="code-label">Room Code</span>
           <strong id="roomCode" dir="ltr">------</strong>
-          <button id="btnCopyCode">نسخ الكود</button>
-          <span id="guestState" class="guest-state">مستني الضيف يدخل…</span>
-          <button id="btnRetryHost" class="danger" hidden>إعادة المحاولة</button>
+          <button id="btnCopyCode">Copy Code</button>
+          <span id="guestState" class="guest-state">Waiting for guest…</span>
+          <button id="btnRetryHost" class="danger" hidden>Retry</button>
         </div>
 
         <div id="joinBox" class="join" hidden>
-          <input id="joinCode" type="text" maxlength="6" inputmode="numeric" placeholder="كود الغرفة — 6 أرقام" dir="ltr">
-          <button id="btnJoin" class="primary">اتصال</button>
-          <button id="btnJoinCancel">إلغاء</button>
+          <input id="joinCode" type="text" maxlength="6" inputmode="numeric" placeholder="Room code — 6 digits" dir="ltr">
+          <button id="btnJoin" class="primary">Connect</button>
+          <button id="btnJoinCancel">Cancel</button>
         </div>
 
         <div class="room-settings">
-          <label>الجودة:
+          <label>Quality:
             <select id="quality">
-              <option value="race" selected>سباق — 720p / 60fps (الأسرع)</option>
-              <option value="hd">جودة عالية — 1080p / 30fps</option>
-              <option value="cinema">سينما — 1080p / 60fps</option>
-              <option value="low">نت ضعيف — 480p / 30fps</option>
+              <option value="race" selected>Race — 720p / 60fps (fastest)</option>
+              <option value="hd">High quality — 1080p / 30fps</option>
+              <option value="cinema">Cinema — 1080p / 60fps</option>
+              <option value="low">Weak connection — 480p / 30fps</option>
             </select>
           </label>
-          <label class="check"><input type="checkbox" id="micOn" checked> المايك (شات صوتي)</label>
-          <label class="check"><input type="checkbox" id="allowControl" checked> اسمح للضيف يتحكم بالماوس والكيبورد</label>
+          <label class="check"><input type="checkbox" id="micOn" checked> Mic (voice chat)</label>
+          <label class="check"><input type="checkbox" id="allowControl" checked> Let guest control mouse &amp; keyboard</label>
+          <label class="name-field">Your name:
+            <input id="myName" type="text" maxlength="20" placeholder="e.g. Ahmed" autocomplete="off">
+          </label>
         </div>
       </div>
 
       <!-- Slim status bar -->
       <div id="statusbar">
-        <span id="status" class="status">جاهز. استضيف غرفة أو انضم بكود، وبعدها افتح AirConsole على موبايلك بالكود اللي على الشاشة.</span>
-        <span id="warn" class="warn" hidden>النت عند المضيف هو اللي بيحدد التأخير — جرّب جودة أقل (480p) لو الصورة بتقطع.</span>
+        <span id="status" class="status">Ready. Host a room or join with a code, then open AirConsole on your phone with the TV code on screen.</span>
+        <span id="warn" class="warn" hidden>The host's upload speed sets the delay — try a lower quality (480p) if the picture stutters.</span>
       </div>
     </header>
 
@@ -106,59 +86,59 @@
            Guest: the remote stream fills this stage. -->
       <div id="viewerWrap" hidden>
         <video id="remoteVideo" autoplay playsinline></video>
-        <div id="viewerHint">بتشوف شاشة المضيف لحظياً — دوس واسحب على الصورة عشان تتحكم، والموبايل هو الدراع بتاع AirConsole.</div>
+        <div id="viewerHint">Watching the host's screen live — click and drag on the picture to control it. Your phone is the AirConsole controller.</div>
       </div>
       <div id="homeHint">
         <div class="hero">
           <h1>Start Browsing</h1>
-          <p class="hero-sub">افتح متصفح مشترك والعب أو اتفرج مع لولي لحظياً — نفس الشاشة، نفس اللحظة.</p>
+          <p class="hero-sub">Open a shared browser and play or watch with Loly live — same screen, same moment.</p>
           <div class="hero-cta">
             <button id="btnOpenBrowser" class="big">Open New Browser</button>
-            <button id="btnHostHome" class="primary big">استضيف غرفة</button>
-            <button id="btnJoinHome" class="big">انضم لغرفة</button>
+            <button id="btnHostHome" class="primary big">Host Room</button>
+            <button id="btnJoinHome" class="big">Join Room</button>
           </div>
-          <h2>LOAD SAVE — غرفك الأخيرة</h2>
+          <h2>LOAD SAVE — Your recent rooms</h2>
           <div id="recentList" class="saves"></div>
-          <p id="noRecent" class="small">لسه مفيش غرف محفوظة — استضيف غرفة أو انضم لواحدة وهتتحفظ هنا.</p>
+          <p id="noRecent" class="small">No saved rooms yet — host a room or join one and it will show up here.</p>
         </div>
         <ol class="steps">
-          <li><b>المضيف</b> (ويندوز) يدوس <b>استضيف غرفة</b> — الكود بيظهر فوراً — ويبعته للضيف.</li>
-          <li><b>الضيف</b> (ماك أو ويب) يدوس <b>انضم لغرفة</b> ويكتب الكود.</li>
-          <li>كل واحد يفتح <b>airconsole.com</b> على موبايله ويدخل كود التلفزيون اللي ظاهر على شاشة اللعبة، والموبايل يبقى الدراع.</li>
-          <li>عايز تتفرج على فيلم سوا؟ اكتب رابط الموقع في شريط العنوان فوق، ودوس <b>ملء الشاشة</b> عشان السينما.</li>
+          <li><b>Host</b> (Windows) clicks <b>Host Room</b> — the code shows instantly — and sends it to the guest.</li>
+          <li><b>Guest</b> (Mac or web) clicks <b>Join Room</b> and types the code.</li>
+          <li>Everyone opens <b>airconsole.com</b> on their phone and enters the TV code shown on the game screen. The phone becomes the controller.</li>
+          <li>Want to watch a movie together? Type the site's URL in the address bar above, then click <b>Fullscreen</b> for cinema mode.</li>
         </ol>
-        <p class="small">التأخير الحقيقي بيعتمد على سرعة الرفع عند المضيف. وضع السباق 720p/60fps محتاج رفع ثابت ٥ ميجا أو أكتر. الرقم اللي فوق ده تأخير الشبكة الحقيقي، مش رقم وهمي.</p>
+        <p class="small">Real delay depends on the host's upload speed. Race mode 720p/60fps needs a stable 5 Mbps upload or more. The number above is the real network delay, not a fake one.</p>
       </div>
     </main>
 
     <!-- Hyperbeam style bottom voice bar -->
     <footer id="bottombar">
-      <button id="btnMicMute" class="bar-btn" title="كتم المايك">
+      <button id="btnMicMute" class="bar-btn" title="Mute mic">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>
-        <span>المايك شغال</span>
+        <span>Mic on</span>
       </button>
-      <label class="vol">صوت الضيف
+      <label class="vol">Guest volume
         <input id="guestVolume" type="range" min="0" max="100" value="100">
       </label>
-      <span id="stats" class="stats" dir="ltr">التأخير: — | السرعة: — | الصورة: —</span>
-      <button id="btnFullscreen2" class="bar-btn">ملء الشاشة</button>
-      <button id="btnLeave2" class="bar-btn danger" hidden>مغادرة</button>
+      <span id="stats" class="stats" dir="ltr">Delay: — | Speed: — | FPS: —</span>
+      <button id="btnFullscreen2" class="bar-btn">Fullscreen</button>
+      <button id="btnLeave2" class="bar-btn danger" hidden>Leave</button>
     </footer>
   </div>
 
   <!-- Hyperbeam style party panel (right side, only inside a room) -->
   <aside id="party" hidden>
-    <h3>الغرفة</h3>
+    <h3><span id="roomTitle">Room</span> <span id="onlineCount" class="online-count">● 1 online</span></h3>
     <div class="party-code">
-      <span>كود الغرفة</span>
+      <span>Room Code</span>
       <strong id="partyCode" dir="ltr">------</strong>
-      <button id="btnCopyCode2">نسخ</button>
+      <button id="btnCopyCode2">Copy</button>
     </div>
     <div class="members">
-      <div class="member"><span class="dot online"></span> أنت <em id="myRole">—</em></div>
-      <div class="member"><span id="guestDot" class="dot"></span> الضيف <em id="guestState2">مش متصل</em></div>
+      <div class="member"><span class="dot online"></span> <span id="memberMeName">You</span> <em id="myRole">—</em></div>
+      <div class="member"><span id="guestDot" class="dot"></span> <span id="memberPeerName">Guest</span> <em id="guestState2">Not connected</em></div>
     </div>
-    <p class="party-note">الصوت شغال بالمايك — دوس زر المايك تحت عشان تكتم نفسك. لو الضيف دخل، اسمه هيظهر هنا.</p>
+    <p class="party-note">Voice chat runs on your mic — hit the mic button below to mute yourself. When the guest joins, their name shows up here.</p>
   </aside>
 </div>
 
