@@ -33,6 +33,7 @@ const PEER_CONFIG = {
 const QUALITY = {
   race: { label: 'سباق — 720p / 60fps', width: 1280, height: 720, frameRate: 60 },
   hd:   { label: 'جودة عالية — 1080p / 30fps', width: 1920, height: 1080, frameRate: 30 },
+  cinema: { label: 'سينما — 1080p / 60fps', width: 1920, height: 1080, frameRate: 60 },
   low:  { label: 'نت ضعيف — 480p / 30fps', width: 854, height: 480, frameRate: 30 },
 };
 
