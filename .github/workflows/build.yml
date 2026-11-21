@@ -19,6 +19,21 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # AdGuard AdBlocker (beta, MV3) is NOT stored in the repo (144 MB
+      # unpacked). Download the pinned release build and unpack it into
+      # assets/extensions/adguard so main.js can loadExtension() it and
+      # electron-builder can bundle it (see asarUnpack in package.json).
+      # If this download fails, the build fails loudly instead of shipping
+      # an app silently missing the ad blocker the user asked for.
+      - name: Download AdGuard extension
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/AdguardTeam/AdguardBrowserExtension/releases/download/v5.5.4-beta.47/chrome-mv3.zip'
+          New-Item -ItemType Directory -Force -Path assets/extensions/adguard | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile adguard-mv3.zip
+          Expand-Archive -Path adguard-mv3.zip -DestinationPath assets/extensions/adguard -Force
+          if (-not (Test-Path assets/extensions/adguard/manifest.json)) { throw 'AdGuard manifest.json missing after extract' }
       - run: npm run dist:win -- --publish never
       - uses: actions/upload-artifact@v4
         with:
@@ -37,6 +52,15 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # AdGuard AdBlocker (beta, MV3) — same pinned download as Windows.
+      - name: Download AdGuard extension
+        run: |
+          set -e
+          url='https://github.com/AdguardTeam/AdguardBrowserExtension/releases/download/v5.5.4-beta.47/chrome-mv3.zip'
+          mkdir -p assets/extensions/adguard
+          curl -sL "$url" -o adguard-mv3.zip
+          unzip -q -o adguard-mv3.zip -d assets/extensions/adguard
+          test -f assets/extensions/adguard/manifest.json
       - run: npm run dist:mac -- --publish never
       - uses: actions/upload-artifact@v4
         with:
