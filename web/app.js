@@ -160,13 +160,29 @@
   // depend on the network (PeerJS signalling) or on the share picker.
   // getDisplayMedia stays in this click handler (it needs the user gesture),
   // but the code is already on screen before the picker even opens.
+  function setGuestState(text, online) {
+    guestStateEl.textContent = text;
+    var g2 = $('guestState2'), dot = $('guestDot');
+    if (g2) g2.textContent = text;
+    if (dot) dot.classList.toggle('online', !!online);
+  }
+
+  function showParty(asRole) {
+    $('party').hidden = false;
+    $('partyCode').textContent = roomCode || '------';
+    $('myRole').textContent = asRole === 'host' ? 'مضيف' : 'ضيف';
+  }
+
   function showHostCode(code) {
     $('hostBox').hidden = false;
     $('roomCode').textContent = code;
     $('btnLeave').hidden = false;
+    $('btnLeave2').hidden = false;
+    $('sideLeave').hidden = false;
     $('homeHint').hidden = true;
     $('btnRetryHost').hidden = true;
-    guestStateEl.textContent = 'مستني الضيف يدخل…';
+    setGuestState('مستني الضيف يدخل…', false);
+    showParty('host');
   }
 
   function startHosting(keepCode) {
@@ -196,15 +212,16 @@
       hostStarting = false;
       setBadge('مضيف (ويب)', 'live');
       controlWarnEl.hidden = false;
+      saveRecent(roomCode, 'host');
       setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للطرف التاني، وهو يدخل من جهازه (ديسكتوب أو ويب).');
     });
     peer.on('call', function (call) {
       activeCall = call;
       call.answer(hostStream || new MediaStream());
-      call.on('close', function () { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); guestStateEl.textContent = 'مستني الضيف يدخل…'; activeCall = null; });
+      call.on('close', function () { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); setGuestState('مستني الضيف يدخل…', false); activeCall = null; });
       call.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
       startStats(call.peerConnection);
-      guestStateEl.textContent = 'الضيف متصل — البث شغال';
+      setGuestState('الضيف متصل — البث شغال', true);
       setStatus('الضيف دخل الغرفة — البث شغال لحظياً. (التحكم من الضيف مش متاح في نسخة الويب كمضيف.)');
     });
     peer.on('connection', function (conn) {
@@ -278,6 +295,10 @@
           $('viewerWrap').hidden = false;
           $('homeHint').hidden = true;
           $('btnLeave').hidden = false;
+          $('btnLeave2').hidden = false;
+          $('sideLeave').hidden = false;
+          showParty('guest');
+          saveRecent(code, 'guest');
           setStatus('البث شغال — دي نفس شاشة المضيف لحظياً. موبايلك هو دراع AirConsole.');
         });
         call.on('close', function () { setStatus('المضيف قفل البث.', true); });
@@ -291,13 +312,17 @@
   function leaveRoom() {
     destroyPeer();
     role = null; roomCode = null; hostStarting = false;
+    micMuted = false; updateMicButtons();
     $('viewerWrap').hidden = true;
     $('homeHint').hidden = false;
     $('hostBox').hidden = true;
     $('joinBox').hidden = true;
     $('btnLeave').hidden = true;
+    $('btnLeave2').hidden = true;
+    $('sideLeave').hidden = true;
+    $('party').hidden = true;
     $('btnRetryHost').hidden = true;
-    guestStateEl.textContent = 'مستني الضيف يدخل…';
+    setGuestState('مستني الضيف يدخل…', false);
     controlWarnEl.hidden = true;
     var v = $('remoteVideo'); v.srcObject = null;
     statsEl.textContent = 'التأخير: — | السرعة: — | الصورة: —';
@@ -349,6 +374,77 @@
     } else { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); }
   });
   $('btnLeave').addEventListener('click', leaveRoom);
+  $('btnLeave2').addEventListener('click', leaveRoom);
+  $('sideLeave').addEventListener('click', leaveRoom);
+  $('btnOpenBrowser').addEventListener('click', function () { window.open('https://www.airconsole.com', '_blank'); });
+  $('btnFullscreen2').addEventListener('click', function () {
+    var el = $('viewerWrap').hidden ? document.documentElement : $('viewerWrap');
+    if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); }
+    else if (el.requestFullscreen) { el.requestFullscreen().catch(function () {}); }
+  });
+  $('sideFullscreen').addEventListener('click', function () { $('btnFullscreen2').click(); });
+  $('btnCopyCode2').addEventListener('click', function () {
+    var code = roomCode || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function () { setStatus('الكود اتنسخ: ' + code); })
+        .catch(function () { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); });
+    } else { setStatus('الكود: ' + code + ' — انسخه يدوياً.', true); }
+  });
+  $('guestVolume').addEventListener('input', function (e) { $('remoteVideo').volume = e.target.value / 100; });
+
+  // ---------- Mic mute (bottom bar + sidebar) ----------
+  var micMuted = false;
+  function updateMicButtons() {
+    var b = $('btnMicMute'), s = $('sideMic');
+    b.classList.toggle('muted', micMuted);
+    s.classList.toggle('muted', micMuted);
+    b.querySelector('span').textContent = micMuted ? 'المايك مكتوم' : 'المايك شغال';
+  }
+  function toggleMicMute() {
+    micMuted = !micMuted;
+    var apply = function (stream) { if (stream) stream.getAudioTracks().forEach(function (t) { t.enabled = !micMuted; }); };
+    apply(micStream); apply(hostStream);
+    updateMicButtons();
+    setStatus(micMuted ? 'المايك مكتوم — الضيف مش هيسمعك.' : 'المايك شغال تاني.');
+  }
+  $('btnMicMute').addEventListener('click', toggleMicMute);
+  $('sideMic').addEventListener('click', toggleMicMute);
+
+  // ---------- LOAD SAVE: recent rooms (localStorage) ----------
+  var RECENT_KEY = 'ourbeam-recent';
+  function loadRecent() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function saveRecent(code, r) {
+    if (!code) return;
+    var list = loadRecent().filter(function (x) { return x.code !== code; });
+    list.unshift({ code: code, role: r, ts: Date.now() });
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5))); } catch (e) {}
+    renderRecent();
+  }
+  function renderRecent() {
+    var list = loadRecent();
+    var box = $('recentList');
+    box.innerHTML = '';
+    $('noRecent').hidden = list.length > 0;
+    list.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'save-row';
+      var when = new Date(item.ts);
+      var whenText = when.toLocaleDateString('ar-EG') + ' ' + when.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      row.innerHTML = '<span class="save-code" dir="ltr">' + item.code + '</span>' +
+        '<span class="save-meta">' + (item.role === 'host' ? 'استضفتها' : 'انضميت ليها') + ' — ' + whenText + '</span>';
+      var btn = document.createElement('button');
+      btn.textContent = item.role === 'host' ? 'استضيف تاني' : 'انضم تاني';
+      btn.addEventListener('click', function () {
+        if (item.role === 'host') { roomCode = item.code; startHosting(true); }
+        else { $('joinCode').value = item.code; $('joinBox').hidden = false; startJoining(); }
+      });
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+  }
+  renderRecent();
   $('quality').addEventListener('change', function () {
     if (role !== 'host' || !hostStream) { setStatus('الجودة اتغيرت — هتتطبق لما تستضيف غرفة.'); return; }
     var q = QUALITY[$('quality').value] || QUALITY.race;
