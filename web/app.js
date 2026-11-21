@@ -18,7 +18,9 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var statusEl = $('status'), statsEl = $('stats'), warnEl = $('warn'),
-      controlWarnEl = $('controlWarn'), badgeEl = $('roleBadge');
+      controlWarnEl = $('controlWarn'), badgeEl = $('roleBadge'),
+      guestStateEl = $('guestState');
+  var hostStarting = false, openTimer = null;
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg;
@@ -65,6 +67,8 @@
   function destroyPeer() {
     if (statsTimer) clearInterval(statsTimer);
     statsTimer = null;
+    if (openTimer) clearTimeout(openTimer);
+    openTimer = null;
     try { if (dataConn) dataConn.close(); } catch (e) {}
     try { if (activeCall) activeCall.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
@@ -152,44 +156,90 @@
     });
   }
 
-  function startHosting() {
+  // The room code is shown IMMEDIATELY when hosting starts — it must never
+  // depend on the network (PeerJS signalling) or on the share picker.
+  // getDisplayMedia stays in this click handler (it needs the user gesture),
+  // but the code is already on screen before the picker even opens.
+  function showHostCode(code) {
+    $('hostBox').hidden = false;
+    $('roomCode').textContent = code;
+    $('btnLeave').hidden = false;
+    $('homeHint').hidden = true;
+    $('btnRetryHost').hidden = true;
+    guestStateEl.textContent = 'مستني الضيف يدخل…';
+  }
+
+  function startHosting(keepCode) {
     if (peer) { setStatus('انت متصل أصلاً — دوس مغادرة الأول.', true); return; }
-    roomCode = String(Math.floor(100000 + Math.random() * 900000));
+    if (hostStarting) return;
+    hostStarting = true;
+    roomCode = (keepCode && roomCode) ? roomCode : String(Math.floor(100000 + Math.random() * 900000));
     role = 'host';
-    setStatus('اختار تبويب AirConsole من نافذة المشاركة، وعلّم على "Share tab audio" عشان صوت اللعبة يوصل.');
-    setBadge('مضيف (ويب)', 'live');
-    acquireHostStream().then(function () {
-      peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
-      peer.on('open', function () {
-        $('hostBox').hidden = false;
-        $('roomCode').textContent = roomCode;
-        $('btnLeave').hidden = false;
-        $('homeHint').hidden = true;
-        controlWarnEl.hidden = false;
-        setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للطرف التاني، وهو يدخل من جهازه (ديسكتوب أو ويب).');
-      });
-      peer.on('call', function (call) {
-        activeCall = call;
-        call.answer(hostStream);
-        call.on('close', function () { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); activeCall = null; });
-        call.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
-        startStats(call.peerConnection);
-        setStatus('الضيف دخل الغرفة — البث شغال لحظياً. (التحكم من الضيف مش متاح في نسخة الويب كمضيف.)');
-      });
-      peer.on('connection', function (conn) {
-        dataConn = conn;
-        conn.on('data', function (ev) {
-          // Web host CANNOT inject this into the shared tab — browser sandbox.
-          // We acknowledge it and keep the warning visible; never pretend it worked.
-          if (ev && ev.type) setStatus('الضيف بيحاول يتحكم، بس نسخة الويب كمضيف مش بتقدر تنفذ التحكم — المشاهدة والصوت شغالين. لو عايز تحكم كامل، المضيف يبقى نسخة الديسكتوب.');
-        });
-      });
-      peer.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
-    }).catch(function (e) {
-      role = null;
+    // 1) The code goes on screen RIGHT NOW.
+    showHostCode(roomCode);
+    setBadge('جاري الاتصال…', 'connecting');
+    setStatus('الكود بتاعك: ' + roomCode + ' — جاري الاتصال بسيرفر الغرف… ابعته للطرف التاني من دلوقتي.');
+    // 2) Create the peer (cheap) and open the share picker in the same gesture.
+    peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
+    var opened = false;
+    if (openTimer) clearTimeout(openTimer);
+    openTimer = setTimeout(function () {
+      if (opened) return;
+      hostStarting = false;
       setBadge('مش متصل', '');
-      setStatus('فشل تجهيز البث: ' + (e && e.message ? e.message : e), true);
+      setStatus('سيرفر الغرف مش بيرد — اتأكد من النت ودوس "إعادة المحاولة". الكود لسه: ' + roomCode, true);
+      $('btnRetryHost').hidden = false;
+    }, 15000);
+    peer.on('open', function () {
+      opened = true;
+      if (openTimer) clearTimeout(openTimer);
+      hostStarting = false;
+      setBadge('مضيف (ويب)', 'live');
+      controlWarnEl.hidden = false;
+      setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للطرف التاني، وهو يدخل من جهازه (ديسكتوب أو ويب).');
     });
+    peer.on('call', function (call) {
+      activeCall = call;
+      call.answer(hostStream || new MediaStream());
+      call.on('close', function () { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); guestStateEl.textContent = 'مستني الضيف يدخل…'; activeCall = null; });
+      call.on('error', function (e) { setStatus(peerErrorArabic(e), true); });
+      startStats(call.peerConnection);
+      guestStateEl.textContent = 'الضيف متصل — البث شغال';
+      setStatus('الضيف دخل الغرفة — البث شغال لحظياً. (التحكم من الضيف مش متاح في نسخة الويب كمضيف.)');
+    });
+    peer.on('connection', function (conn) {
+      dataConn = conn;
+      conn.on('data', function (ev) {
+        // Web host CANNOT inject this into the shared tab — browser sandbox.
+        // We acknowledge it and keep the warning visible; never pretend it worked.
+        if (ev && ev.type) setStatus('الضيف بيحاول يتحكم، بس نسخة الويب كمضيف مش بتقدر تنفذ التحكم — المشاهدة والصوت شغالين. لو عايز تحكم كامل، المضيف يبقى نسخة الديسكتوب.');
+      });
+    });
+    peer.on('error', function (e) {
+      setStatus(peerErrorArabic(e), true);
+      if (!opened) { setBadge('مش متصل', ''); $('btnRetryHost').hidden = false; }
+    });
+    peer.on('disconnected', function () {
+      setStatus('الاتصال بسيرفر الغرف اتقطع — بيحاول يرجع…');
+      try { peer.reconnect(); } catch (e) {}
+    });
+    // 3) Screen/tab capture (picker) — runs in parallel with signalling.
+    setStatus('اختار تبويب AirConsole من نافذة المشاركة، وعلّم على "Share tab audio" عشان صوت اللعبة يوصل. الكود بتاعك: ' + roomCode);
+    acquireHostStream().then(function () {
+      setStatus('البث جاهز — الكود: ' + roomCode + '. ابعته للطرف التاني.');
+    }).catch(function (e) {
+      // Keep the room + code: the peer is alive, only capture failed.
+      setStatus('الغرفة مفتوحة بالكود ' + roomCode + ' بس مشاركة الشاشة ما تمتش: ' + (e && e.message ? e.message : e) + ' — دوس "إعادة المحاولة".', true);
+      $('btnRetryHost').hidden = false;
+    });
+  }
+
+  function retryHosting() {
+    $('btnRetryHost').hidden = true;
+    destroyPeer();
+    hostStarting = false;
+    role = null;
+    startHosting(true); // same code, shown again immediately
   }
 
   function startJoining() {
@@ -208,7 +258,13 @@
     }
     micPromise.then(function (mic) {
       peer = new Peer(PEER_CONFIG);
+      var guestOpened = false;
+      var guestTimer = setTimeout(function () {
+        if (!guestOpened) setStatus('سيرفر الغرف مش بيرد — اتأكد من النت وحاول تاني.', true);
+      }, 15000);
       peer.on('open', function () {
+        guestOpened = true;
+        clearTimeout(guestTimer);
         var conn = peer.connect('ourbeam-' + code, { reliable: true });
         dataConn = conn;
         conn.on('open', function () { setStatus('متصل بالمضيف — جاري استقبال البث...'); });
@@ -234,12 +290,14 @@
 
   function leaveRoom() {
     destroyPeer();
-    role = null; roomCode = null;
+    role = null; roomCode = null; hostStarting = false;
     $('viewerWrap').hidden = true;
     $('homeHint').hidden = false;
     $('hostBox').hidden = true;
     $('joinBox').hidden = true;
     $('btnLeave').hidden = true;
+    $('btnRetryHost').hidden = true;
+    guestStateEl.textContent = 'مستني الضيف يدخل…';
     controlWarnEl.hidden = true;
     var v = $('remoteVideo'); v.srcObject = null;
     statsEl.textContent = 'التأخير: — | السرعة: — | الصورة: —';
@@ -275,7 +333,10 @@
     });
   })();
 
-  $('btnHost').addEventListener('click', startHosting);
+  $('btnHost').addEventListener('click', function () { startHosting(); });
+  $('btnHostHome').addEventListener('click', function () { startHosting(); });
+  $('btnJoinHome').addEventListener('click', function () { $('joinBox').hidden = false; $('joinCode').focus(); });
+  $('btnRetryHost').addEventListener('click', retryHosting);
   $('btnJoinShow').addEventListener('click', function () { $('joinBox').hidden = false; $('joinCode').focus(); });
   $('btnJoinCancel').addEventListener('click', function () { $('joinBox').hidden = true; });
   $('btnJoin').addEventListener('click', startJoining);
