@@ -54,6 +54,10 @@
 
   var peer = null, role = null, roomCode = null;
   var hostStream = null, micStream = null, activeCall = null, dataConn = null;
+  // The host-initiated media call that carries the screen video to the guest.
+  // (The guest's own outbound call is audio-only: its offer has no video
+  // m-line, so no video can ever flow back on it — see ensureGuestCall.)
+  var videoCall = null;
   var statsTimer = null, lastStats = null;
 
   // ---------- Names: each side sets its display name; it is exchanged with
@@ -100,8 +104,9 @@
     openTimer = null;
     try { if (dataConn) dataConn.close(); } catch (e) {}
     try { if (activeCall) activeCall.close(); } catch (e) {}
+    try { if (videoCall) videoCall.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
-    peer = null; activeCall = null; dataConn = null;
+    peer = null; activeCall = null; dataConn = null; videoCall = null;
     stopTracks(hostStream); stopTracks(micStream);
     hostStream = null; micStream = null;
   }
@@ -185,6 +190,43 @@
     });
   }
 
+  // The screen video can ONLY travel on a call the HOST places: the guest's
+  // outbound call offers no video m-line (it carries mic audio at most), so
+  // answering it can never send video back — SDP answers can't add media
+  // sections the offer didn't have. The guest therefore gets the screen on
+  // this host-initiated call, and accepts it via its peer.on('call') handler.
+  function bindHostCall(call) {
+    call.on('close', function () { setStatus('Guest left. The room is still open with code ' + roomCode + '.'); setGuestState('Waiting for guest…', false); clearPeer(); if (activeCall === call) activeCall = null; if (videoCall === call) videoCall = null; });
+    call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
+    startStats(call.peerConnection);
+    setGuestState('Guest connected — streaming live', true);
+    setStatus('Guest joined the room — streaming live. (Guest control is not available with a web host.)');
+  }
+  function hostHasLiveVideo() {
+    try {
+      var pc = videoCall && videoCall.peerConnection;
+      return !!(pc && pc.getSenders().some(function (s) { return s.track && s.track.kind === 'video' && s.track.readyState === 'live'; }));
+    } catch (e) { return false; }
+  }
+  // (Re)place the host-initiated video call to the guest once the screen
+  // stream exists and the guest is reachable. Called when the stream becomes
+  // ready, when the guest's mic call arrives, and when the data connection
+  // opens — whichever comes last wins.
+  function ensureGuestCall() {
+    if (role !== 'host' || !hostStream || !peer) return;
+    if (videoCall && hostHasLiveVideo()) return;
+    var guestId = (videoCall && videoCall.peer) || (activeCall && activeCall.peer) || (dataConn && dataConn.peer);
+    if (!guestId) return;
+    try { if (videoCall) videoCall.close(); } catch (e) {}
+    videoCall = null;
+    try {
+      var call = peer.call(guestId, hostStream);
+      videoCall = call;
+      activeCall = call;
+      bindHostCall(call);
+    } catch (e) {}
+  }
+
   // The room code is shown IMMEDIATELY when hosting starts — it must never
   // depend on the network (PeerJS signalling) or on the share picker.
   // getDisplayMedia stays in this click handler (it needs the user gesture),
@@ -245,12 +287,12 @@
     });
     peer.on('call', function (call) {
       activeCall = call;
-      call.answer(hostStream || new MediaStream());
-      call.on('close', function () { setStatus('Guest left. The room is still open with code ' + roomCode + '.'); setGuestState('Waiting for guest…', false); clearPeer(); activeCall = null; });
-      call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
-      startStats(call.peerConnection);
-      setGuestState('Guest connected — streaming live', true);
-      setStatus('Guest joined the room — streaming live. (Guest control is not available with a web host.)');
+      // This is the guest's mic call (audio only). Answer at once — the
+      // screen video goes out on the host-initiated call (ensureGuestCall),
+      // because this call's offer has no video m-line to answer with.
+      call.answer(hostStream || micStream || new MediaStream());
+      bindHostCall(call);
+      ensureGuestCall();
     });
     peer.on('connection', function (conn) {
       dataConn = conn;
@@ -261,7 +303,7 @@
         // We acknowledge it and keep the warning visible; never pretend it worked.
         setStatus('The guest is trying to control, but the web host cannot apply control — watching and voice still work. For full control, the host should use the desktop app.');
       });
-      conn.on('open', function () { sendHello(); });
+      conn.on('open', function () { sendHello(); ensureGuestCall(); });
     });
     peer.on('error', function (e) {
       setStatus(peerErrorEnglish(e), true);
@@ -275,6 +317,7 @@
     setStatus('Pick the AirConsole tab in the share window, and tick "Share tab audio" so the game sound comes through. Your code: ' + roomCode);
     acquireHostStream().then(function () {
       setStatus('Stream is ready — code: ' + roomCode + '. Send it to the other person.');
+      ensureGuestCall();
     }).catch(function (e) {
       // Keep the room + code: the peer is alive, only capture failed.
       setStatus('Room is open with code ' + roomCode + ' but screen sharing did not start: ' + (e && e.message ? e.message : e) + ' — click "Retry".', true);
@@ -288,6 +331,29 @@
     hostStarting = false;
     role = null;
     startHosting(true); // same code, shown again immediately
+  }
+
+  // One handler for any incoming media call — the outbound call to the host
+  // and host-initiated (re-)calls after the stream becomes ready.
+  function attachGuestStream(call) {
+    call.on('stream', function (remoteStream) {
+      var v = $('remoteVideo');
+      v.srcObject = remoteStream;
+      v.play().catch(function () {});
+      // The guest's own outbound call carries audio only (mic) — the screen
+      // video arrives on the host's call. Only open the viewer for video.
+      if (!remoteStream.getVideoTracks().length) return;
+      $('viewerWrap').hidden = false;
+      $('homeHint').hidden = true;
+      $('btnLeave').hidden = false;
+      $('btnLeave2').hidden = false;
+      showParty('guest');
+      saveRecent(roomCode, 'guest');
+      setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
+    });
+    call.on('close', function () { setStatus('The host closed the stream.', true); });
+    call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
+    startStats(call.peerConnection);
   }
 
   function startJoining() {
@@ -322,21 +388,13 @@
         conn.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
         var call = peer.call('ourbeam-' + code, mic || new MediaStream());
         activeCall = call;
-        call.on('stream', function (remoteStream) {
-          var v = $('remoteVideo');
-          v.srcObject = remoteStream;
-          v.play().catch(function () {});
-          $('viewerWrap').hidden = false;
-          $('homeHint').hidden = true;
-          $('btnLeave').hidden = false;
-          $('btnLeave2').hidden = false;
-          showParty('guest');
-          saveRecent(code, 'guest');
-          setStatus('Stream is live — this is the host\'s screen in real time. Your phone is the AirConsole controller.');
-        });
-        call.on('close', function () { setStatus('The host closed the stream.', true); });
-        call.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
-        startStats(call.peerConnection);
+        attachGuestStream(call);
+      });
+      // The host may call the guest (again) once its screen stream is ready.
+      peer.on('call', function (incoming) {
+        incoming.answer(micStream || mic || new MediaStream());
+        activeCall = incoming;
+        attachGuestStream(incoming);
       });
       peer.on('error', function (e) { setStatus(peerErrorEnglish(e), true); });
     });
