@@ -1,4 +1,4 @@
-// MyEverything — Renderer: UI + PeerJS signalling + host capture + guest viewer
+// OurBeam — Renderer: UI + PeerJS signalling + host capture + guest viewer
 // Networking: PeerJS public cloud is used for SIGNALLING ONLY. The video/audio
 // stream itself is peer-to-peer WebRTC (direct when possible). No TURN server
 // is configured (no free credentials) — if both sides are behind strict NAT,
@@ -102,11 +102,11 @@ function startStats(pc) {
   }, 2000);
 }
 
-// ---------- Host capture: the MyEverything window (game) + system audio ----------
+// ---------- Host capture: the OurBeam window (game) + system audio ----------
 async function acquireHostStream() {
   const q = QUALITY[$('quality').value] || QUALITY.race;
   const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
-  const self = sources.find((s) => /MyEverything/i.test(s.name)) || sources.find((s) => s.name.toLowerCase().includes('screen')) || sources[0];
+  const self = sources.find((s) => /OurBeam/i.test(s.name)) || sources.find((s) => s.name.toLowerCase().includes('screen')) || sources[0];
   if (!self) throw new Error('مفيش مصدر شاشة متاح للبث.');
   // Try video + system-audio loopback first; fall back to video-only.
   try {
@@ -170,7 +170,7 @@ async function startHosting() {
     role = null;
     return;
   }
-  peer = new Peer('myeverything-' + roomCode, PEER_CONFIG);
+  peer = new Peer('ourbeam-' + roomCode, PEER_CONFIG);
   peer.on('open', () => {
     $('hostBox').hidden = false;
     $('roomCode').textContent = roomCode;
@@ -214,11 +214,11 @@ async function startJoining() {
   }
   peer = new Peer(PEER_CONFIG);
   peer.on('open', () => {
-    const conn = peer.connect('myeverything-' + code, { reliable: true });
+    const conn = peer.connect('ourbeam-' + code, { reliable: true });
     dataConn = conn;
     conn.on('open', () => setStatus('متصل بالمضيف — جاري استقبال البث...'));
     conn.on('error', (e) => setStatus(peerErrorArabic(e), true));
-    const call = peer.call('myeverything-' + code, mic || new MediaStream());
+    const call = peer.call('ourbeam-' + code, mic || new MediaStream());
     activeCall = call;
     call.on('stream', (remoteStream) => {
       const v = $('remoteVideo');

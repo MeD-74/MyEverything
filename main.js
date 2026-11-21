@@ -1,4 +1,4 @@
-// MyEverything — Main process (Electron 45)
+// OurBeam — Main process (Electron 45)
 // - Main window: Arabic RTL UI (renderer)
 // - BrowserView: the shared Chromium browser (AirConsole by default)
 // - Host capture is done in the renderer via desktopCapturer + getUserMedia
@@ -37,7 +37,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'MyEverything — متصفح مشترك',
+    title: 'OurBeam — متصفح مشترك',
     backgroundColor: '#0b0b0f',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
