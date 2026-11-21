@@ -94,5 +94,5 @@
     "dist:win": "electron-builder --win",
     "start": "electron . --no-sandbox"
   },
-  "version": "1.5.1"
+  "version": "1.5.2"
 }

@@ -25,6 +25,14 @@ const PEER_CONFIG = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
+      // TURN relay (Open Relay Project — free public relay). STUN alone
+      // cannot connect two hosts behind strict NAT / CGNAT, which is the
+      // common case on home networks: without a relay the video AND the
+      // data channel (guest control) both never establish. The TCP/TLS
+      // relay works even where UDP is blocked.
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
     ],
     sdpSemantics: 'unified-plan',
   },
@@ -99,12 +107,27 @@ function destroyPeer() {
 }
 
 // ---------- Stats: real RTT / bitrate / FPS from getStats(), every 2s ----------
+let lastIceState = '';
 function startStats(pc) {
   if (statsTimer) clearInterval(statsTimer);
   lastStats = null;
+  lastIceState = '';
   statsTimer = setInterval(async () => {
     if (!pc) return;
     try {
+      const iceState = pc.iceConnectionState || '';
+      // Surface the connection state: 'checking' means the two networks
+      // are still trying to reach each other; 'failed' means even the
+      // TURN relay could not connect them — that is the real diagnosis
+      // when the guest sees nothing.
+      if (iceState !== lastIceState) {
+        lastIceState = iceState;
+        if (iceState === 'failed' || iceState === 'disconnected') {
+          setStatus('Connection failed (' + iceState + ') — the two networks could not connect directly or via relay. Try again, or try a different network (e.g. phone hotspot).', true);
+        } else if (iceState === 'connected' || iceState === 'completed') {
+          setStatus('Connected — streaming live.');
+        }
+      }
       const report = await pc.getStats();
       let rttMs = null, bitrateKbps = null, fps = null, dropped = null;
       let now = Date.now();
@@ -132,7 +155,8 @@ function startStats(pc) {
         }
       });
       statsEl.textContent =
-        'Delay: ' + (rttMs === null ? '—' : rttMs + 'ms') +
+        'Connection: ' + (pc.iceConnectionState || '—') +
+        ' | Delay: ' + (rttMs === null ? '—' : rttMs + 'ms') +
         ' | Speed: ' + (bitrateKbps === null ? '—' : bitrateKbps + ' kbps') +
         ' | FPS: ' + (fps === null ? '—' : fps + ' fps') +
         (dropped === null ? '' : ' | Dropped: ' + dropped);
