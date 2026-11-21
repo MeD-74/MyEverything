@@ -163,13 +163,30 @@ async function replaceHostVideoTrack() {
 // The room code is shown IMMEDIATELY when hosting starts — it must never
 // depend on the network (PeerJS signalling) or on screen capture succeeding.
 // Signalling and capture happen after the code is already on screen.
+function setGuestState(text, online) {
+  guestStateEl.textContent = text;
+  const g2 = $('guestState2'), dot = $('guestDot');
+  if (g2) g2.textContent = text;
+  if (dot) dot.classList.toggle('online', !!online);
+}
+
+function showParty(asRole) {
+  $('party').hidden = false;
+  $('partyCode').textContent = roomCode || '------';
+  $('myRole').textContent = asRole === 'host' ? 'مضيف' : 'ضيف';
+  reportViewBounds();
+}
+
 function showHostCode(code) {
   $('hostBox').hidden = false;
   $('roomCode').textContent = code;
   $('btnLeave').hidden = false;
+  $('btnLeave2').hidden = false;
+  $('sideLeave').hidden = false;
   $('homeHint').hidden = true;
   $('btnRetryHost').hidden = true;
-  guestStateEl.textContent = 'مستني الضيف يدخل…';
+  setGuestState('مستني الضيف يدخل…', false);
+  showParty('host');
 }
 
 async function startHosting(keepCode) {
@@ -198,6 +215,7 @@ async function startHosting(keepCode) {
     if (openTimer) clearTimeout(openTimer);
     hostStarting = false;
     setBadge('مضيف', 'live');
+    saveRecent(roomCode, 'host');
     setStatus('الغرفة مفتوحة — الكود: ' + roomCode + '. ابعته للولي، وهي تدخل من جهازها.');
     try {
       await acquireHostStream();
@@ -211,10 +229,10 @@ async function startHosting(keepCode) {
     activeCall = call;
     call.answer(hostStream || new MediaStream());
     call.on('stream', () => {}); // host does not need the guest stream for video; mic audio (if any) plays via the call
-    call.on('close', () => { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); guestStateEl.textContent = 'مستني الضيف يدخل…'; activeCall = null; });
+    call.on('close', () => { setStatus('الضيف خرج. الغرفة لسه مفتوحة بالكود ' + roomCode + '.'); setGuestState('مستني الضيف يدخل…', false); activeCall = null; });
     call.on('error', (e) => setStatus(peerErrorArabic(e), true));
     startStats(call.peerConnection);
-    guestStateEl.textContent = 'الضيف متصل — البث شغال';
+    setGuestState('الضيف متصل — البث شغال', true);
     setStatus('الولي دخلت الغرفة — البث شغال لحظياً.');
   });
   peer.on('connection', (conn) => {
@@ -223,7 +241,7 @@ async function startHosting(keepCode) {
       // Guest remote input: forward to the BrowserView in the main process.
       if (ev && ev.type) ipcRenderer.send('remote-input', ev);
     });
-    conn.on('open', () => { guestStateEl.textContent = 'الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'; setStatus('الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'); });
+    conn.on('open', () => { setGuestState('الضيف متصل وبيتحكم', true); setStatus('الضيف متصل وبيتحكم — لو عايز تمنع التحكم شيل علامة السماح.'); });
   });
   peer.on('error', (e) => {
     setStatus(peerErrorArabic(e), true);
@@ -278,6 +296,10 @@ async function startJoining() {
       $('viewerWrap').hidden = false;
       $('homeHint').hidden = true;
       $('btnLeave').hidden = false;
+      $('btnLeave2').hidden = false;
+      $('sideLeave').hidden = false;
+      showParty('guest');
+      saveRecent(code, 'guest');
       setStatus('البث شغال — دي نفس شاشة المضيف لحظياً. موبايلك هو دراع AirConsole.');
     });
     call.on('close', () => { setStatus('المضيف قفل البث.', true); });
@@ -290,18 +312,23 @@ async function startJoining() {
 function leaveRoom() {
   destroyPeer();
   role = null; roomCode = null; hostStarting = false;
+  micMuted = false; updateMicButtons();
   $('viewerWrap').hidden = true;
   $('homeHint').hidden = false;
   $('hostBox').hidden = true;
   $('joinBox').hidden = true;
   $('btnLeave').hidden = true;
+  $('btnLeave2').hidden = true;
+  $('sideLeave').hidden = true;
+  $('party').hidden = true;
   $('btnRetryHost').hidden = true;
-  guestStateEl.textContent = 'مستني الضيف يدخل…';
+  setGuestState('مستني الضيف يدخل…', false);
   const v = $('remoteVideo'); v.srcObject = null;
   statsEl.textContent = 'التأخير: — | السرعة: — | الصورة: —';
   warnEl.hidden = true;
   setBadge('مش متصل', '');
   setStatus('خرجت من الغرفة. استضيف غرفة أو انضم بكود تاني.');
+  reportViewBounds();
 }
 
 // ---------- Viewer input: relative coords so any window size works ----------
@@ -373,10 +400,37 @@ $('btnFullscreen').addEventListener('click', async () => {
   fullscreenOn = !fullscreenOn;
   await ipcRenderer.invoke('set-fullscreen-game', fullscreenOn);
   $('btnFullscreen').textContent = fullscreenOn ? 'ارجع للواجهة' : 'ملء الشاشة';
+  $('btnFullscreen2').textContent = fullscreenOn ? 'ارجع للواجهة' : 'ملء الشاشة';
   $('chrome').style.display = fullscreenOn ? 'none' : '';
+  $('sidebar').style.display = fullscreenOn ? 'none' : '';
+  $('bottombar').style.display = fullscreenOn ? 'none' : '';
+  $('party').style.display = fullscreenOn ? 'none' : '';
   if (fullscreenOn) setStatus('وضع اللعبة بملء الشاشة — دوس Esc عشان ترجع للواجهة.');
-  if (!fullscreenOn) { /* toolbar back; BrowserView bounds restored by main */ }
+  if (!fullscreenOn) { /* layout back; BrowserView bounds restored by stage ResizeObserver */ }
 });
+$('btnFullscreen2').addEventListener('click', () => $('btnFullscreen').click());
+$('btnLeave2').addEventListener('click', leaveRoom);
+$('sideLeave').addEventListener('click', leaveRoom);
+$('sideAirconsole').addEventListener('click', async () => {
+  const r = await ipcRenderer.invoke('nav', 'airconsole');
+  $('address').value = 'https://www.airconsole.com';
+  if (r && r.url) $('address').value = r.url;
+});
+$('sideYoutube').addEventListener('click', async () => {
+  const r = await ipcRenderer.invoke('nav', 'go', 'https://www.youtube.com');
+  if (r && r.url) $('address').value = r.url;
+});
+$('sideFullscreen').addEventListener('click', () => $('btnFullscreen').click());
+$('btnOpenBrowser').addEventListener('click', async () => {
+  const r = await ipcRenderer.invoke('nav', 'airconsole');
+  $('address').value = 'https://www.airconsole.com';
+  if (r && r.url) $('address').value = r.url;
+});
+$('btnCopyCode2').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(roomCode || ''); setStatus('الكود اتنسخ: ' + roomCode); }
+  catch (e) { setStatus('الكود: ' + roomCode + ' — انسخه يدوياً.', true); }
+});
+$('guestVolume').addEventListener('input', (e) => { $('remoteVideo').volume = e.target.value / 100; });
 $('allowControl').addEventListener('change', (e) => ipcRenderer.invoke('set-allow-control', e.target.checked));
 $('quality').addEventListener('change', async () => {
   if (role !== 'host' || !hostStream) { setStatus('الجودة اتغيرت — هتتطبق لما تستضيف غرفة.'); return; }
@@ -391,20 +445,80 @@ $('quality').addEventListener('change', async () => {
 $('micOn').addEventListener('change', () => setStatus('إعداد المايك هيتطبق في الاتصال الجاي.'));
 
 // ---------- Browser chrome: live tab title / address + BrowserView bounds ----------
-// The BrowserView must sit exactly under the header, whose height changes when
-// the room code or the join box appears — so the renderer measures it and
-// reports it to the main process instead of hardcoding a number.
-function reportChromeHeight() {
+// The BrowserView must sit exactly over the stage (under the header, right of the
+// sidebar, left of the party panel) — so the renderer measures the stage rect and
+// reports it to the main process instead of hardcoding numbers.
+function reportViewBounds() {
   try {
-    const h = Math.ceil($('chrome').getBoundingClientRect().height);
-    ipcRenderer.invoke('set-view-bounds', { x: 0, y: h, width: window.innerWidth, height: Math.max(0, window.innerHeight - h) });
+    const r = $('stage').getBoundingClientRect();
+    ipcRenderer.invoke('set-view-bounds', {
+      x: Math.round(r.left), y: Math.round(r.top),
+      width: Math.round(r.width), height: Math.round(r.height),
+    });
   } catch (e) {}
 }
-window.addEventListener('resize', reportChromeHeight);
-if (window.ResizeObserver) new ResizeObserver(reportChromeHeight).observe($('chrome'));
+window.addEventListener('resize', reportViewBounds);
+if (window.ResizeObserver) {
+  new ResizeObserver(reportViewBounds).observe($('stage'));
+  new ResizeObserver(reportViewBounds).observe($('chrome'));
+}
 ipcRenderer.on('page-info', (_e, info) => {
   if (!info) return;
   if (info.title) $('tabTitle').textContent = info.title;
   if (info.url && document.activeElement !== $('address')) $('address').value = info.url;
 });
-reportChromeHeight();
+
+// ---------- Mic mute (bottom bar + sidebar) ----------
+let micMuted = false;
+function updateMicButtons() {
+  const b = $('btnMicMute'), s = $('sideMic');
+  b.classList.toggle('muted', micMuted);
+  s.classList.toggle('muted', micMuted);
+  b.querySelector('span').textContent = micMuted ? 'المايك مكتوم' : 'المايك شغال';
+}
+function toggleMicMute() {
+  micMuted = !micMuted;
+  const apply = (stream) => { if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = !micMuted; }); };
+  apply(micStream); apply(hostStream);
+  updateMicButtons();
+  setStatus(micMuted ? 'المايك مكتوم — الضيف مش هيسمعك.' : 'المايك شغال تاني.');
+}
+$('btnMicMute').addEventListener('click', toggleMicMute);
+$('sideMic').addEventListener('click', toggleMicMute);
+
+// ---------- LOAD SAVE: recent rooms (localStorage) ----------
+const RECENT_KEY = 'ourbeam-recent';
+function loadRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; }
+}
+function saveRecent(code, r) {
+  if (!code) return;
+  const list = loadRecent().filter((x) => x.code !== code);
+  list.unshift({ code, role: r, ts: Date.now() });
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5))); } catch (e) {}
+  renderRecent();
+}
+function renderRecent() {
+  const list = loadRecent();
+  const box = $('recentList');
+  box.innerHTML = '';
+  $('noRecent').hidden = list.length > 0;
+  list.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'save-row';
+    const when = new Date(item.ts);
+    const whenText = when.toLocaleDateString('ar-EG') + ' ' + when.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    row.innerHTML = '<span class="save-code" dir="ltr">' + item.code + '</span>' +
+      '<span class="save-meta">' + (item.role === 'host' ? 'استضفتها' : 'انضميت ليها') + ' — ' + whenText + '</span>';
+    const btn = document.createElement('button');
+    btn.textContent = item.role === 'host' ? 'استضيف تاني' : 'انضم تاني';
+    btn.addEventListener('click', () => {
+      if (item.role === 'host') { roomCode = item.code; startHosting(true); }
+      else { $('joinCode').value = item.code; $('joinBox').hidden = false; startJoining(); }
+    });
+    row.appendChild(btn);
+    box.appendChild(row);
+  });
+}
+renderRecent();
+reportViewBounds();

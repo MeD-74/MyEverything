@@ -9,9 +9,9 @@ const path = require('path');
 
 let mainWindow = null;
 let view = null;
-// The renderer measures the real header height and reports it via
-// 'set-view-bounds'; 140 is only the fallback until the first report.
-let viewBounds = { x: 0, y: 140, width: 1280, height: 660 };
+// The renderer measures the real stage rect and reports it via
+// 'set-view-bounds'; this is only the fallback until the first report.
+let viewBounds = { x: 60, y: 140, width: 1220, height: 660 };
 let allowControl = true;
 let fullscreenGame = false;
 
@@ -67,7 +67,7 @@ function createWindow() {
   mainWindow.on('resize', () => {
     if (!view || fullscreenGame) return;
     const [w, h] = mainWindow.getContentSize();
-    viewBounds = { x: 0, y: viewBounds.y, width: w, height: h - viewBounds.y };
+    viewBounds = { x: viewBounds.x, y: viewBounds.y, width: w - viewBounds.x, height: h - viewBounds.y };
     view.setBounds(viewBounds);
   });
 
@@ -105,7 +105,7 @@ ipcMain.handle('set-fullscreen-game', (_e, on) => {
     view.setAutoResize({ width: true, height: true });
   } else {
     const [w, h] = mainWindow.getContentSize();
-    viewBounds = { x: 0, y: viewBounds.y, width: w, height: h - viewBounds.y };
+    viewBounds = { x: viewBounds.x, y: viewBounds.y, width: w - viewBounds.x, height: h - viewBounds.y };
     view.setBounds(viewBounds);
   }
   return fullscreenGame;
