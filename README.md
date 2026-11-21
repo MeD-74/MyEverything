@@ -15,9 +15,9 @@
 (إحداثيات نسبية 0..1 + أحداث ماوس/كيبورد). عشان كده الأوضاع متوافقة مع بعض.
 
 ### (أ) ديسكتوب — ديسكتوب (الأفضل للعب)
-- المضيف: ويندوز — نزّل `OurBeam-Setup-v1.2.0.exe` من Artifacts في
+- المضيف: ويندوز — نزّل `OurBeam-Setup-v1.3.0.exe` من Artifacts في
   GitHub Actions، سطّب وافتح.
-- الواجهة مكس بين Opera GX وHyperbeam: شريط جانبي بأيقونات (AirConsole، يوتيوب، ملء الشاشة، المايك)، تبويب فوق، شريط عنوان تقدر تكتب فيه أي رابط
+- الواجهة مكس بين Opera GX وHyperbeam: شريط جانبي بأيقونات (AirConsole، يوتيوب، ملء الشاشة، المايك)، تبويب فوق، شريط عنوان تقدر تكتب فيه أي رابط، وثيم أسود وأحمر بالكامل
   (AirConsole أو يوتيوب أو موقع فيلم)، وأزرار رجوع/قدام/تحديث.
 - الضيف: ماك — نزّل الـ `.dmg` واسحب للـ Applications (أول مرة Right Click ثم Open).
 - المضيف يدوس **استضيف غرفة** ويبعت الكود، والضيف يدوس **انضم لغرفة**.
@@ -67,14 +67,14 @@
 ## التسطيب (ديسكتوب)
 
 ### ويندوز (المضيف — أحمد)
-1. نزّل `OurBeam-Setup-v1.2.0.exe` من قسم Artifacts في GitHub Actions
+1. نزّل `OurBeam-Setup-v1.3.0.exe` من قسم Artifacts في GitHub Actions
    (أو من الـ Release لو اتعمل).
 2. شغّله Next ثم Install ثم Finish. البرنامج مش موقّع بكود ساينينج،
    فممكن Windows SmartScreen يطلع تحذير أول مرة — دوس More info ثم Run anyway.
 3. افتح OurBeam.
 
 ### ماك (الضيفة — لولي)
-1. نزّلي `OurBeam-v1.2.0-arm64.dmg` (لأجهزة Apple Silicon) أو `x64`
+1. نزّلي `OurBeam-v1.3.0-arm64.dmg` (لأجهزة Apple Silicon) أو `x64`
    (لأجهزة Intel القديمة).
 2. افتحي الـ DMG واسحبي OurBeam لمجلد Applications.
 3. البرنامج مش موقّع من Apple، فأول مرة: Right Click على الأيقونة ثم Open

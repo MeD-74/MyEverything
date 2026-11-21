@@ -1,8 +1,22 @@
-/* OurBeam 1.2.0 — Opera GX sidebar + Hyperbeam room layout (dark + red) */
+/* OurBeam 1.3.0 — black & red theme, Cairo + Chakra Petch (GX-style) */
+/* Embedded fonts: Cairo (Arabic) + Chakra Petch (GX-style English).
+   Both are OFL-licensed and bundled in assets/fonts — no internet needed. */
+@font-face { font-family: 'Cairo'; src: url('assets/fonts/Cairo.ttf') format('truetype');
+  font-weight: 200 1000; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Medium.ttf') format('truetype');
+  font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
+  font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url('assets/fonts/ChakraPetch-Bold.ttf') format('truetype');
+  font-weight: 700; font-style: normal; font-display: swap; }
+
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; height: 100%; background: #0b0b0f; color: #f2f2f2;
-  font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+html, body { margin: 0; height: 100%; background: #000000; color: #f2f2f2;
+  font-family: 'Chakra Petch', 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; }
 body { height: 100vh; overflow: hidden; }
 button { font-family: inherit; }
 
@@ -12,44 +26,44 @@ button { font-family: inherit; }
 #party { direction: rtl; }
 
 /* ---------- Opera GX style sidebar ---------- */
-#sidebar { flex: none; width: 60px; background: #101014; border-inline-end: 1px solid #000;
+#sidebar { flex: none; width: 60px; background: #050505; border-inline-end: 1px solid #000;
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
 .side-logo { width: 40px; height: 40px; border-radius: 12px; background: #fa1e4e; color: #fff;
   font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center;
   margin-bottom: 6px; letter-spacing: .5px; }
 .side-btn { width: 44px; height: 44px; border-radius: 12px; border: none; background: transparent;
   color: #9aa0a6; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.side-btn:hover { background: #232329; color: #fff; }
-.side-btn.active { background: #2b2b31; color: #fa1e4e; }
+.side-btn:hover { background: #1a1a1a; color: #fff; }
+.side-btn.active { background: #1a1a1a; color: #fa1e4e; }
 .side-btn.muted { color: #fa1e4e; background: #2b1218; }
 .side-btn.danger { color: #ff6b6b; }
 .side-spacer { flex: 1; }
 
 /* ---------- Chrome (tab strip + toolbar + room bar + status bar) ---------- */
-#chrome { flex: none; background: #202124; border-bottom: 1px solid #000;
+#chrome { flex: none; background: #0a0a0a; border-bottom: 1px solid #000;
   box-shadow: 0 2px 10px rgba(0,0,0,.45); z-index: 10; }
 
 /* Tab strip */
 #tabstrip { display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px 0;
-  background: #17181c; }
+  background: #050505; }
 .logo { font-size: 19px; font-weight: 800; color: #fa1e4e; padding: 0 8px 8px;
   letter-spacing: .3px; white-space: nowrap; }
 .tab { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 320px;
-  background: #2b2c31; color: #e8eaed; border: 1px solid #2b2c31; border-bottom: none;
+  background: #141414; color: #e8eaed; border: 1px solid #141414; border-bottom: none;
   border-radius: 10px 10px 0 0; padding: 8px 14px; font-size: 13.5px; cursor: default; }
-.tab.active { background: #202124; }
+.tab.active { background: #0a0a0a; }
 .tab-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #fa1e4e; }
 #tabTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #btnNewTab { flex: none; background: transparent; color: #dadce0; border: none;
   border-radius: 50%; width: 28px; height: 28px; font-size: 19px; line-height: 1;
   cursor: pointer; margin-bottom: 4px; }
-#btnNewTab:hover { background: #3c4043; }
+#btnNewTab:hover { background: #1a1a1a; }
 .tabstrip-spacer { flex: 1; }
-.badge { background: #3c4043; color: #e8eaed; border-radius: 20px; padding: 5px 12px;
+.badge { background: #1c1c1c; color: #e8eaed; border-radius: 20px; padding: 5px 12px;
   font-size: 12.5px; white-space: nowrap; margin-bottom: 5px; }
-.badge.live { background: #1d7a4f; }
-.badge.guest { background: #274b7a; }
-.badge.connecting { background: #8a6d00; }
+.badge.live { background: #fa1e4e; }
+.badge.guest { background: #8f1d2c; }
+.badge.connecting { background: #5c1218; }
 
 /* Toolbar */
 #toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
@@ -57,11 +71,11 @@ button { font-family: inherit; }
 .navbtns button { background: transparent; color: #dadce0; border: none;
   border-radius: 50%; width: 32px; height: 32px; font-size: 19px; line-height: 1;
   cursor: pointer; }
-.navbtns button:hover { background: #3c4043; }
+.navbtns button:hover { background: #1a1a1a; }
 .omnibox { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 8px;
-  background: #2f3033; border: 1px solid #2f3033; border-radius: 22px; padding: 0 6px 0 12px;
+  background: #141414; border: 1px solid #141414; border-radius: 22px; padding: 0 6px 0 12px;
   height: 38px; }
-.omnibox:focus-within { border-color: #fa1e4e; background: #35363a; }
+.omnibox:focus-within { border-color: #fa1e4e; background: #1a1a1a; }
 .omnibox .lock { flex: none; color: #9aa0a6; }
 #address { flex: 1; min-width: 0; background: transparent; color: #fff; border: none;
   outline: none; font-size: 14px; height: 100%; }
@@ -70,13 +84,13 @@ button { font-family: inherit; }
   border-radius: 50%; width: 28px; height: 28px; font-size: 15px; cursor: pointer; }
 #btnGo:hover { background: #3c4043; }
 .room-actions { display: flex; gap: 6px; align-items: center; flex: none; flex-wrap: wrap; }
-.room-actions button { background: #3c4043; color: #e8eaed; border: 1px solid #3c4043;
+.room-actions button { background: #1c1c1c; color: #e8eaed; border: 1px solid #1c1c1c;
   border-radius: 18px; padding: 7px 14px; cursor: pointer; font-size: 13.5px; white-space: nowrap; }
-.room-actions button:hover { background: #4a4d52; }
+.room-actions button:hover { background: #2a2a2a; }
 button.primary { background: #fa1e4e !important; color: #fff !important;
   border-color: #fa1e4e !important; font-weight: 700; }
 button.primary:hover { background: #ff3b61 !important; }
-button.air { background: #1d7a4f !important; border-color: #1d7a4f !important;
+button.air { background: #c40e2e !important; border-color: #c40e2e !important;
   color: #fff !important; font-weight: 700; }
 button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important;
   color: #fff !important; }
@@ -84,33 +98,33 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 /* Room bar */
 #roombar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 6px 12px 8px; font-size: 13px; color: #ccc; }
-.codepill { display: flex; align-items: center; gap: 10px; background: #26260f;
-  border: 1px solid #8a6d00; border-radius: 10px; padding: 6px 12px; }
-.code-label { color: #ffd83d; font-size: 12.5px; }
-#roomCode { font-size: 24px; letter-spacing: 5px; color: #f5c518; font-weight: 800;
-  font-family: Consolas, monospace; }
-.codepill button { background: #3c4043; color: #fff; border: 1px solid #4a4d52;
+.codepill { display: flex; align-items: center; gap: 10px; background: #1a0508;
+  border: 1px solid #fa1e4e; border-radius: 10px; padding: 6px 12px; }
+.code-label { color: #ff8a9a; font-size: 12.5px; }
+#roomCode { font-size: 24px; letter-spacing: 5px; color: #ff2a4d; font-weight: 800;
+  font-family: 'Chakra Petch', 'Cairo', Consolas, monospace; }
+.codepill button { background: #1c1c1c; color: #fff; border: 1px solid #2a2a2a;
   border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
-.codepill button:hover { background: #4a4d52; }
-.guest-state { color: #9be3b8; font-size: 12.5px; }
-.join { display: flex; gap: 8px; align-items: center; background: #2b2c31;
-  border: 1px solid #3c4043; border-radius: 10px; padding: 6px 10px; }
-.join input { background: #17181c; color: #fff; border: 1px solid #3c4043;
+.codepill button:hover { background: #2a2a2a; }
+.guest-state { color: #ff8a9a; font-size: 12.5px; }
+.join { display: flex; gap: 8px; align-items: center; background: #141414;
+  border: 1px solid #1c1c1c; border-radius: 10px; padding: 6px 10px; }
+.join input { background: #050505; color: #fff; border: 1px solid #1c1c1c;
   border-radius: 6px; padding: 7px 10px; font-size: 16px; letter-spacing: 3px;
   width: 150px; text-align: center; }
-.join button { background: #3c4043; color: #fff; border: 1px solid #3c4043;
+.join button { background: #1c1c1c; color: #fff; border: 1px solid #1c1c1c;
   border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13.5px; }
 .room-settings { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.room-settings select { background: #2f3033; color: #fff; border: 1px solid #3c4043;
+.room-settings select { background: #141414; color: #fff; border: 1px solid #1c1c1c;
   border-radius: 6px; padding: 5px; font-size: 13px; }
 .check { display: flex; align-items: center; gap: 5px; cursor: pointer; }
 
 /* Status bar */
 #statusbar { display: flex; align-items: center; gap: 14px; padding: 5px 14px 7px;
   min-height: 28px; }
-.status { color: #9be3b8; font-size: 13px; }
+.status { color: #d7d7d7; font-size: 13px; }
 .status.error { color: #ff9a9a; }
-.warn { background: #4a2f00; color: #ffd27a; border-radius: 6px; padding: 3px 10px;
+.warn { background: #2b0a10; color: #ff8a9a; border-radius: 6px; padding: 3px 10px;
   font-size: 12.5px; }
 
 /* ---------- Stage ---------- */
@@ -123,14 +137,14 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 .hero-sub { color: #bdc1c6; font-size: 15px; margin: 0 0 6px; }
 .hero-cta { display: flex; gap: 12px; justify-content: center; margin: 20px 0 8px; flex-wrap: wrap; }
 .hero-cta button { border-radius: 10px; padding: 12px 22px; font-size: 15px;
-  cursor: pointer; border: 1px solid #3c4043; background: #2b2c31; color: #fff; }
+  cursor: pointer; border: 1px solid #1c1c1c; background: #141414; color: #fff; }
 .hero-cta button.big { min-width: 150px; }
 .saves { display: flex; flex-direction: column; gap: 8px; max-width: 480px; margin: 0 auto; }
-.save-row { display: flex; align-items: center; gap: 10px; background: #17181c;
-  border: 1px solid #2b2c31; border-radius: 10px; padding: 10px 14px; text-align: start; }
+.save-row { display: flex; align-items: center; gap: 10px; background: #0a0a0a;
+  border: 1px solid #1c1c1c; border-radius: 10px; padding: 10px 14px; text-align: start; }
 .save-row:hover { border-color: #fa1e4e; }
-.save-code { font-family: Consolas, monospace; font-size: 18px; letter-spacing: 3px;
-  color: #f5c518; font-weight: 700; }
+.save-code { font-family: 'Chakra Petch', 'Cairo', Consolas, monospace; font-size: 18px; letter-spacing: 3px;
+  color: #ff2a4d; font-weight: 700; }
 .save-meta { flex: 1; color: #9aa0a6; font-size: 12.5px; }
 .save-row button { background: #fa1e4e; color: #fff; border: none; border-radius: 8px;
   padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 700; }
@@ -144,31 +158,31 @@ button.danger { background: #7a1d1d !important; border-color: #7a1d1d !important
 
 /* ---------- Hyperbeam style bottom voice bar ---------- */
 #bottombar { flex: none; display: flex; align-items: center; gap: 14px;
-  background: #17181c; border-top: 1px solid #000; padding: 8px 14px; }
-.bar-btn { display: flex; align-items: center; gap: 7px; background: #2b2c31; color: #e8eaed;
-  border: 1px solid #3c4043; border-radius: 18px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
-.bar-btn:hover { background: #3c4043; }
+  background: #050505; border-top: 1px solid #000; padding: 8px 14px; }
+.bar-btn { display: flex; align-items: center; gap: 7px; background: #141414; color: #e8eaed;
+  border: 1px solid #1c1c1c; border-radius: 18px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+.bar-btn:hover { background: #2a2a2a; }
 .bar-btn.muted { background: #2b1218; border-color: #fa1e4e; color: #ff6b6b; }
 .bar-btn.danger { background: #7a1d1d; border-color: #7a1d1d; color: #fff; }
 .vol { display: flex; align-items: center; gap: 8px; color: #9aa0a6; font-size: 12.5px; }
 .vol input { width: 110px; accent-color: #fa1e4e; }
-.stats { direction: ltr; margin-inline-start: auto; background: #101014;
-  border: 1px solid #2b2c31; border-radius: 6px; padding: 6px 10px;
-  font-family: Consolas, monospace; font-size: 12.5px; color: #9aa0a6; }
+.stats { direction: ltr; margin-inline-start: auto; background: #050505;
+  border: 1px solid #1c1c1c; border-radius: 6px; padding: 6px 10px;
+  font-family: 'Chakra Petch', 'Cairo', Consolas, monospace; font-size: 12.5px; color: #9aa0a6; }
 
 /* ---------- Hyperbeam style party panel ---------- */
-#party { flex: none; width: 250px; background: #141419; border-inline-start: 1px solid #000;
+#party { flex: none; width: 250px; background: #050505; border-inline-start: 1px solid #000;
   padding: 16px 14px; overflow-y: auto; }
 #party h3 { margin: 0 0 12px; font-size: 15px; color: #fff; }
-.party-code { background: #26260f; border: 1px solid #8a6d00; border-radius: 10px;
+.party-code { background: #1a0508; border: 1px solid #fa1e4e; border-radius: 10px;
   padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.party-code span { color: #ffd83d; font-size: 12px; }
-#partyCode { font-size: 26px; letter-spacing: 5px; color: #f5c518; font-weight: 800;
-  font-family: Consolas, monospace; }
-.party-code button { background: #3c4043; color: #fff; border: 1px solid #4a4d52;
+.party-code span { color: #ff8a9a; font-size: 12px; }
+#partyCode { font-size: 26px; letter-spacing: 5px; color: #ff2a4d; font-weight: 800;
+  font-family: 'Chakra Petch', 'Cairo', Consolas, monospace; }
+.party-code button { background: #1c1c1c; color: #fff; border: 1px solid #2a2a2a;
   border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
 .members { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
-.member { display: flex; align-items: center; gap: 9px; background: #1d1d22;
+.member { display: flex; align-items: center; gap: 9px; background: #0d0d0d;
   border-radius: 10px; padding: 10px 12px; font-size: 14px; }
 .member em { margin-inline-start: auto; font-style: normal; color: #9aa0a6; font-size: 12.5px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: none; }

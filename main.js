@@ -52,7 +52,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'OurBeam — متصفح مشترك',
-    backgroundColor: '#0b0b0f',
+    backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true, // personal app: renderer needs require('peerjs') + desktopCapturer
